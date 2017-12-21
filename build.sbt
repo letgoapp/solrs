@@ -6,7 +6,7 @@ homepage := Some(url("https://github.com/inoio/solrs"))
 
 organization := "io.ino"
 
-version := "2.0.0-RC5"
+version := "2.0.0-RC5-letgo"
 
 licenses := Seq("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.html"))
 
@@ -35,7 +35,7 @@ val tomcatVersion = "8.5.15"
 
 libraryDependencies ++= Seq(
   "org.apache.solr"         % "solr-solrj"        % solrVersion,
-  "org.asynchttpclient"     % "async-http-client" % "2.0.32",
+  "org.asynchttpclient"     % "async-http-client" % "2.1.0-RC3",
   "org.scala-lang.modules" %% "scala-xml"         % "1.0.6",
   "io.dropwizard.metrics"   % "metrics-core"      % "3.2.2" % "optional",
   "org.slf4j"               % "slf4j-api"         % slf4jVersion,
@@ -61,13 +61,8 @@ libraryDependencies ++= Seq(
 fork in Test := true
 
 // Publish settings
-publishTo in ThisBuild := {
-  val nexus = "https://oss.sonatype.org/"
-  if (isSnapshot.value)
-    Some("snapshots" at nexus + "content/repositories/snapshots")
-  else
-    Some("releases" at nexus + "service/local/staging/deploy/maven2")
-}
+publishTo in ThisBuild := Some("spark-release-local" at
+  "http://artifactory.bi.letgo.aws/artifactory/spark-release-local")
 
 publishMavenStyle := true
 
