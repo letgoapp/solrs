@@ -10,9 +10,9 @@ version := "2.0.0-RC5-letgo"
 
 licenses := Seq("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0.html"))
 
-scalaVersion := "2.11.11"
+scalaVersion := "2.12.2"
 
-crossScalaVersions := Seq("2.11.8", "2.12.2")
+crossScalaVersions := Seq("2.12.2", "2.11.8")
 
 scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature")
 
