@@ -62,7 +62,7 @@ fork in Test := true
 
 // Publish settings
 publishTo in ThisBuild := Some("spark-release-local" at
-  "http://artifactory.bi.letgo.aws/artifactory/spark-release-local")
+  "http://internal-bipro-artifactory-1634906620.us-east-1.elb.amazonaws.com/artifactory/spark-release-local")
 credentials += Credentials(Path.userHome / ".ivy2" / ".credentials")
 publishMavenStyle := true
 
