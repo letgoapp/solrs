@@ -49,19 +49,20 @@ import org.asynchttpclient.AsyncCompletionHandler
 import org.asynchttpclient.AsyncHttpClient
 import org.asynchttpclient.Response
 import org.slf4j.LoggerFactory
-
 import scala.concurrent.duration._
 import scala.collection.JavaConverters._
 import scala.util.Failure
 import scala.util.Success
 import scala.util.control.NonFatal
 
+import io.netty.handler.codec.http.HttpHeaderNames
+
 //noinspection ConvertibleToMethodValue
 object AsyncSolrClient {
 
   /* The function that creates that actual instance of AsyncSolrClient */
   private[solrs] type ASCFactory[F[_], ASC <: AsyncSolrClient[F]] = (LoadBalancer, AsyncHttpClient, /*shutdownHttpClient*/ Boolean,
-    Option[RequestInterceptor], RequestWriter, ResponseParser, Metrics, Option[ServerStateObservation[F]], RetryPolicy) => ASC
+    Option[String], Option[RequestInterceptor], RequestWriter, ResponseParser, Metrics, Option[ServerStateObservation[F]], RetryPolicy) => ASC
 
   def apply[F[_]](baseUrl: String)(implicit futureFactory: FutureFactory[F]): AsyncSolrClient[F] =
     new Builder(new SingleServerLB(baseUrl), ascFactory[F] _).build
@@ -78,6 +79,7 @@ object AsyncSolrClient {
   private[solrs] def ascFactory[F[_]](loadBalancer: LoadBalancer,
                                       httpClient: AsyncHttpClient,
                                       shutdownHttpClient: Boolean,
+                                      jwtHttpClient: Option[String],
                                       requestInterceptor: Option[RequestInterceptor],
                                       requestWriter: RequestWriter,
                                       responseParser: ResponseParser,
@@ -88,6 +90,7 @@ object AsyncSolrClient {
       loadBalancer,
       httpClient,
       shutdownHttpClient,
+      jwtHttpClient,
       requestInterceptor,
       requestWriter,
       responseParser,
@@ -99,6 +102,7 @@ object AsyncSolrClient {
   case class Builder[F[_], ASC <: AsyncSolrClient[F]] protected (loadBalancer: LoadBalancer,
                                                                  httpClient: Option[AsyncHttpClient],
                                                                  shutdownHttpClient: Boolean,
+                                                                 jwtHttpClient: Option[String],
                                                                  requestInterceptor: Option[RequestInterceptor] = None,
                                                                  requestWriter: Option[RequestWriter] = None,
                                                                  responseParser: Option[ResponseParser] = None,
@@ -107,11 +111,11 @@ object AsyncSolrClient {
                                                                  retryPolicy: RetryPolicy = RetryPolicy.TryOnce,
                                                                  factory: ASCFactory[F, ASC])(implicit futureFactory: FutureFactory[F]) {
 
-    def this(loadBalancer: LoadBalancer, factory: ASCFactory[F, ASC])(implicit futureFactory: FutureFactory[F]) = this(loadBalancer, None, true, factory = factory)
+    def this(loadBalancer: LoadBalancer, factory: ASCFactory[F, ASC])(implicit futureFactory: FutureFactory[F]) = this(loadBalancer, None, true, None, factory = factory)
     def this(baseUrl: String, factory: ASCFactory[F, ASC])(implicit futureFactory: FutureFactory[F]) = this(new SingleServerLB(baseUrl), factory = factory)
 
-    def withHttpClient(httpClient: AsyncHttpClient): Builder[F, ASC] = {
-      copy(httpClient = Some(httpClient), shutdownHttpClient = false)
+    def withHttpClient(httpClient: AsyncHttpClient, jwtHttpClient: Option[String] = None): Builder[F, ASC] = {
+      copy(httpClient = Some(httpClient), jwtHttpClient = jwtHttpClient,  shutdownHttpClient = false)
     }
 
     def withRequestInterceptor(requestInterceptor: RequestInterceptor): Builder[F, ASC] = {
@@ -174,6 +178,7 @@ object AsyncSolrClient {
         loadBalancer,
         httpClient.getOrElse(createHttpClient),
         shutdownHttpClient,
+        jwtHttpClient,
         requestInterceptor,
         requestWriter.getOrElse(createRequestWriter),
         responseParser.getOrElse(createResponseParser),
@@ -198,6 +203,7 @@ object AsyncSolrClient {
 class AsyncSolrClient[F[_]] protected (private[solrs] val loadBalancer: LoadBalancer,
                                        httpClient: AsyncHttpClient,
                                        shutdownHttpClient: Boolean,
+                                       jwtHttpClient: Option[String],
                                        requestInterceptor: Option[RequestInterceptor] = None,
                                        requestWriter: RequestWriter = new BinaryRequestWriter,
                                        responseParser: ResponseParser = new BinaryResponseParser,
@@ -640,7 +646,10 @@ class AsyncSolrClient[F[_]] protected (private[solrs] val loadBalancer: LoadBala
         req.setFormParams(wparams.getMap.asScala.mapValues(asList[String](_: _*)).asJava)
       }
     }
-    val request = requestBuilder.addHeader("User-Agent", agent).build()
+
+    val prepareRequest = requestBuilder.addHeader(HttpHeaderNames.USER_AGENT, agent)
+    if (jwtHttpClient.isDefined) prepareRequest.addHeader(HttpHeaderNames.AUTHORIZATION, "Bearer " + jwtHttpClient.get)
+    val request = prepareRequest.build()
 
     try {
       httpClient.executeRequest(request, new AsyncCompletionHandler[Response]() {
@@ -782,6 +791,7 @@ trait TypedAsyncSolrClient[F[_], ASC <: AsyncSolrClient[F]] {
   protected def build(loadBalancer: LoadBalancer,
                       httpClient: AsyncHttpClient,
                       shutdownHttpClient: Boolean,
+                      jwtHttpClient: Option[String],
                       requestInterceptor: Option[RequestInterceptor],
                       requestWriter: RequestWriter,
                       responseParser: ResponseParser,

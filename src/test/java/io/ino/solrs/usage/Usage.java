@@ -30,7 +30,7 @@ public class Usage {
 
 	{
 		JavaAsyncSolrClient solr = JavaAsyncSolrClient.builder("http://localhost:8983/solr/collection1")
-				.withHttpClient(new DefaultAsyncHttpClient())
+				.withHttpClient(new DefaultAsyncHttpClient(), null)
 				.withResponseParser(new XMLResponseParser())
 				.build();
 	}

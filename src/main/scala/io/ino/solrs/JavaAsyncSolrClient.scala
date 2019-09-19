@@ -41,13 +41,14 @@ import scala.compat.java8.OptionConverters._
 class JavaAsyncSolrClient(override private[solrs] val loadBalancer: LoadBalancer,
                           httpClient: AsyncHttpClient,
                           shutdownHttpClient: Boolean,
+                          jwtHttpClient: Option[String],
                           requestInterceptor: Option[RequestInterceptor] = None,
                           requestWriter: RequestWriter = new BinaryRequestWriter,
                           responseParser: ResponseParser = new BinaryResponseParser,
                           metrics: Metrics = NoopMetrics,
                           serverStateObservation: Option[ServerStateObservation[CompletionStage]] = None,
                           retryPolicy: RetryPolicy = RetryPolicy.TryOnce)
-  extends AsyncSolrClient[CompletionStage](loadBalancer, httpClient, shutdownHttpClient, requestInterceptor, requestWriter, responseParser, metrics, serverStateObservation, retryPolicy)(JavaFutureFactory) {
+  extends AsyncSolrClient[CompletionStage](loadBalancer, httpClient, shutdownHttpClient, jwtHttpClient, requestInterceptor, requestWriter, responseParser, metrics, serverStateObservation, retryPolicy)(JavaFutureFactory) {
 
   /**
     * Performs a request to a solr server.
@@ -778,6 +779,7 @@ object JavaAsyncSolrClient extends TypedAsyncSolrClient[CompletionStage, JavaAsy
   override protected def build(loadBalancer: LoadBalancer,
                                httpClient: AsyncHttpClient,
                                shutdownHttpClient: Boolean,
+                               jwtHttpClient: Option[String],
                                requestInterceptor: Option[RequestInterceptor],
                                requestWriter: RequestWriter,
                                responseParser: ResponseParser,
@@ -788,6 +790,7 @@ object JavaAsyncSolrClient extends TypedAsyncSolrClient[CompletionStage, JavaAsy
       loadBalancer,
       httpClient,
       shutdownHttpClient,
+      jwtHttpClient,
       requestInterceptor,
       requestWriter,
       responseParser,

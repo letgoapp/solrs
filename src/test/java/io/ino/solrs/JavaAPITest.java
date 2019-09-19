@@ -37,7 +37,7 @@ public class JavaAPITest extends JUnitSuite {
     @Test
     public void testAsyncSolrClientBuilderUrl() throws ExecutionException, InterruptedException {
         JavaAsyncSolrClient solr = JavaAsyncSolrClient.builder("http://localhost:" + solrRunner.port() + "/solr/collection1")
-                .withHttpClient(new DefaultAsyncHttpClient())
+                .withHttpClient(new DefaultAsyncHttpClient(), null)
                 .withResponseParser(new XMLResponseParser())
                 .build();
         CompletionStage<QueryResponse> response = solr.query(new SolrQuery("*:*"));
@@ -79,7 +79,7 @@ public class JavaAPITest extends JUnitSuite {
     @Test
     public void testAsyncSolrClientBuilderLB() throws ExecutionException, InterruptedException {
         JavaAsyncSolrClient solr = JavaAsyncSolrClient.builder(new SingleServerLB("http://localhost:" + solrRunner.port() + "/solr/collection1"))
-                .withHttpClient(new DefaultAsyncHttpClient())
+                .withHttpClient(new DefaultAsyncHttpClient(), null)
                 .withResponseParser(new XMLResponseParser())
                 .build();
         CompletionStage<QueryResponse> response = solr.query(new SolrQuery("*:*"));
