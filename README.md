@@ -14,6 +14,7 @@ This is a java/scala solr client providing an interface like SolrJ, just asynchr
 * Optimized request routing (e.g. updates go to leaders, `_route_` param is respected, `replica.type` is supported for `shards.preference` param)
 * Pluggable load balancing strategies, comes with a performance/statistics based load balancer
 * Support for retry policies in case of failures
+* Added JWT
 
 ## Documentation
 
