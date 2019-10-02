@@ -21,14 +21,15 @@ import scala.util.control.NonFatal
   * @param extraFilters extra servlet filters to use
   * @param maybeSolrHome (optional) a Solr home dir to use, tries to locate resource /solr-home in classpath if None
   */
-class SolrRunner(val port: Int,
-                 val context: String,
-                 extraFilters: Map[Class[_ <: Filter], String],
-                 maybeSolrHome: Option[Path]) {
+class SolrRunner(
+    val port: Int,
+    val context: String,
+    extraFilters: Map[Class[_ <: Filter], String],
+    maybeSolrHome: Option[Path]) {
 
   import io.ino.solrs.SolrRunner._
 
-  val url = s"http://localhost:$port$context"
+  val url                                   = s"http://localhost:$port$context"
   private[solrs] var jetty: JettySolrRunner = _
 
   // init "base" = some temp dir for this run
@@ -41,7 +42,9 @@ class SolrRunner(val port: Int,
     import scala.collection.JavaConverters._
 
     if (jetty != null) {
-      throw new IllegalStateException("Start can only be invoked once. You probably want to use 'stop()' + 'start()'.")
+      throw new IllegalStateException(
+        "Start can only be invoked once. You probably want to use 'stop()' + 'start()'."
+      )
     }
     logger.info(s"Starting Solr on port $port with Solr home ${solrHome.toAbsolutePath.toString}")
 
@@ -49,22 +52,23 @@ class SolrRunner(val port: Int,
     System.setProperty("solr.default.confdir", solrHome.resolve("/collection1/conf").toString)
     System.setProperty("solr.lock.type", "single")
 
-    val jettyConfig = JettyConfig.builder.setContext(context).setPort(port).withFilters(extraFilters.asJava).build
+    val jettyConfig =
+      JettyConfig.builder.setContext(context).setPort(port).withFilters(extraFilters.asJava).build
     jetty = new JettySolrRunner(solrHome.toAbsolutePath.toString, jettyConfig)
     startJetty(jetty)
 
     this
   }
 
-  def awaitReady(value: Long, unit: TimeUnit): SolrRunner = {
+  def awaitReady(value: Long, unit: TimeUnit): SolrRunner =
     awaitReady(Duration(value, unit))
-  }
 
   def awaitReady(timeout: Duration): SolrRunner = {
-    val solrClient = new HttpSolrClient.Builder(s"http://localhost:$port$context/collection1").build()
+    val solrClient =
+      new HttpSolrClient.Builder(s"http://localhost:$port$context/collection1").build()
 
     def await(left: Duration): SolrRunner = {
-      if(left.toMillis <= 0) {
+      if (left.toMillis <= 0) {
         throw new TimeoutException(s"Solr not available after $timeout")
       }
       try {
@@ -83,19 +87,19 @@ class SolrRunner(val port: Int,
   def isStarted: Boolean = jetty != null && jetty.isRunning
 
   def stop() {
-    if(isStarted) {
+    if (isStarted) {
       logger.info(s"Stopping Solr Jetty running on port $port")
       SolrRunner.stopJetty(jetty)
       jetty = null
     }
   }
 
-  private def createBaseDir(): Path = {
+  private def createBaseDir(): Path =
     Files.createDirectories(tmpDir.resolve("base" + System.currentTimeMillis()))
-  }
 
   private def makeSolrHomeDirIn(baseDir: Path): Path = {
-    val solrHomeSourceDir = maybeSolrHome.map(_.toFile).getOrElse(new File(getClass.getResource("/solr-home").toURI))
+    val solrHomeSourceDir =
+      maybeSolrHome.map(_.toFile).getOrElse(new File(getClass.getResource("/solr-home").toURI))
     val solrHomeTargetInTemp = Files.createDirectories(baseDir.resolve("solrhome"))
     FileUtils.copyDirectory(solrHomeSourceDir, solrHomeTargetInTemp.toFile)
     solrHomeTargetInTemp
@@ -118,19 +122,21 @@ class SolrRunner(val port: Int,
 
 object SolrRunner {
 
-  private val logger: Logger = LoggerFactory.getLogger(classOf[SolrRunner])
-  private var solrRunners: Map[Int,SolrRunner] = Map.empty
+  private val logger: Logger                    = LoggerFactory.getLogger(classOf[SolrRunner])
+  private var solrRunners: Map[Int, SolrRunner] = Map.empty
 
-  val DefaultContext = "/solr"
+  val DefaultContext                                       = "/solr"
   val DefaultExtraFilters: Map[Class[_ <: Filter], String] = Map.empty
 
   // start with default parameters set, for Java API
   def start(port: Int): SolrRunner = start(port, DefaultContext, DefaultExtraFilters, None)
 
-  def start(port: Int,
-            context: String = DefaultContext,
-            extraFilters: Map[Class[_ <: Filter], String] = DefaultExtraFilters,
-            maybeSolrHome: Option[Path] = None): SolrRunner = new SolrRunner(port, context, extraFilters, maybeSolrHome).start
+  def start(
+      port: Int,
+      context: String = DefaultContext,
+      extraFilters: Map[Class[_ <: Filter], String] = DefaultExtraFilters,
+      maybeSolrHome: Option[Path] = None
+    ): SolrRunner = new SolrRunner(port, context, extraFilters, maybeSolrHome).start
 
   def startOnce(port: Int): SolrRunner = startOnce(port, DefaultContext, DefaultExtraFilters, None)
 
@@ -138,23 +144,26 @@ object SolrRunner {
     * Starts Solr Jetty or returns a previously started instance.
     * Also registers a shutdown hook to shutdown Solr Jetty when the JVM exits.
     */
-  def startOnce(port: Int,
-                context: String = "/solr",
-                extraFilters: Map[Class[_ <: Filter], String] = Map.empty,
-                maybeSolrHome: Option[Path] = None): SolrRunner = {
-    solrRunners.getOrElse(port, {
-      val solrRunner = start(port, context, extraFilters, maybeSolrHome)
-      solrRunners += port -> solrRunner
+  def startOnce(
+      port: Int,
+      context: String = "/solr",
+      extraFilters: Map[Class[_ <: Filter], String] = Map.empty,
+      maybeSolrHome: Option[Path] = None
+    ): SolrRunner =
+    solrRunners.getOrElse(
+      port, {
+        val solrRunner = start(port, context, extraFilters, maybeSolrHome)
+        solrRunners += port -> solrRunner
 
-      Runtime.getRuntime.addShutdownHook(new Thread() {
-        override def run() {
-          solrRunner.stop()
-        }
-      })
+        Runtime.getRuntime.addShutdownHook(new Thread() {
+          override def run() {
+            solrRunner.stop()
+          }
+        })
 
-      solrRunner
-    })
-  }
+        solrRunner
+      }
+    )
 
   def restartJetty(jetty: JettySolrRunner): Unit = {
     logger.info(s"Restarting Jetty on port ${jetty.getLocalPort}...")
@@ -176,11 +185,12 @@ object SolrRunner {
         case t: Throwable => logger.error("", t)
       }
     }
-    try
-      jetty.stop()
+    try jetty.stop()
     catch {
       case _: InterruptedException =>
-        logger.info("Jetty stop interrupted - should be a test caused interruption, we will try again to be sure we shutdown")
+        logger.info(
+          "Jetty stop interrupted - should be a test caused interruption, we will try again to be sure we shutdown"
+        )
     }
     if (!jetty.isStopped) jetty.stop()
     if (!jetty.isStopped) throw new RuntimeException("Could not stop jetty")

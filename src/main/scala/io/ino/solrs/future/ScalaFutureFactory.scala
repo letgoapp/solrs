@@ -14,7 +14,7 @@ object ScalaFutureFactory extends FutureFactory[SFuture] {
 
   def toBase[T]: Future[T] => SFuture[T] = {
     case sf: ScalaFuture[T] => sf.inner
-    case _ => throw new Exception("Wrong future type")
+    case _                  => throw new Exception("Wrong future type")
   }
 
   class ScalaFuture[+T](f: SFuture[T]) extends FutureBase[T] {
@@ -78,9 +78,9 @@ object ScalaFutureFactory extends FutureFactory[SFuture] {
   }
 
   class ScalaPromise[T] extends Promise[T] {
-    val inner: SPromise[T] = SPromise[T]()
-    def future: Future[T] = new ScalaFuture(inner.future)
-    def success(value: T): Unit = inner.success(value)
+    val inner: SPromise[T]                  = SPromise[T]()
+    def future: Future[T]                   = new ScalaFuture(inner.future)
+    def success(value: T): Unit             = inner.success(value)
     def failure(exception: Throwable): Unit = inner.failure(exception)
   }
 

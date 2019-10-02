@@ -85,13 +85,9 @@ paradoxMaterialTheme in Compile := {
 */
 
 // Publish settings
-publishTo in ThisBuild := {
-  val nexus = "https://oss.sonatype.org/"
-  if (isSnapshot.value)
-    Some("snapshots" at nexus + "content/repositories/snapshots")
-  else
-    Some("releases" at nexus + "service/local/staging/deploy/maven2")
-}
+publishTo in ThisBuild := Some("spark-release-local" at
+  "http://internal-pro-repo-artifactory-alb-int-1312206971.us-east-1.elb.amazonaws.com/artifactory/spark-release-local")
+credentials += Credentials(Path.userHome / ".sbt" / ".credentials")
 
 publishMavenStyle := true
 
@@ -99,14 +95,3 @@ publishArtifact in Test := false
 
 // enable publishing the jar produced by `test:package`
 publishArtifact in (Test, packageBin) := true
-
-pomIncludeRepository := { _ => false }
-
-pomExtra := (
-  <developers>
-    <developer>
-      <id>martin.grotzke</id>
-      <name>Martin Grotzke</name>
-      <url>https://github.com/magro</url>
-    </developer>
-  </developers>)

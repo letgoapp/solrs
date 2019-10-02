@@ -6,13 +6,15 @@ import org.scalatest.{BeforeAndAfterAll, ConfigMap, Suite}
 trait RunningSolr extends BeforeAndAfterAll {
   this: Suite =>
 
-  protected var solrRunner: SolrRunner = _
+  protected var solrRunner: SolrRunner      = _
   protected var solrJClient: HttpSolrClient = _
 
   override def beforeAll() {
     solrRunner = SolrRunner.startOnce(8888)
 
-    solrJClient = new HttpSolrClient.Builder("http://localhost:" + solrRunner.port + "/solr/collection1").build()
+    solrJClient = new HttpSolrClient.Builder(
+      "http://localhost:" + solrRunner.port + "/solr/collection1"
+    ).build()
   }
 
   override def afterAll() {

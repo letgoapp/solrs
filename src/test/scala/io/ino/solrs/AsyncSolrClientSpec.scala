@@ -16,8 +16,8 @@ import scala.util.control.NoStackTrace
 
 class AsyncSolrClientSpec extends StandardFunSpec {
 
-  private val query = new SolrQuery("*:*")
-  private implicit val timeout = 1.second
+  private val query            = new SolrQuery("*:*")
+  implicit private val timeout = 1.second
 
   describe("Solr") {
 
@@ -28,13 +28,13 @@ class AsyncSolrClientSpec extends StandardFunSpec {
       val response = solr.query(query)
 
       awaitReady(response)
-      a [ConnectException] should be thrownBy await(response)
+      a[ConnectException] should be thrownBy await(response)
     }
 
     it("should return failed future on AHC IOException") {
-      val ahc = new DefaultAsyncHttpClient()
+      val ahc    = new DefaultAsyncHttpClient()
       val ahcSpy = spy(ahc)
-      val solr = AsyncSolrClient.Builder("http://localhost:12345/solr").withHttpClient(ahcSpy).build
+      val solr   = AsyncSolrClient.Builder("http://localhost:12345/solr").withHttpClient(ahcSpy).build
 
       val ex = new RuntimeException("Unexpected?!") with NoStackTrace
       doThrow(ex).when(ahcSpy).executeRequest(any[Request], any[AsyncHandler[Response]])
@@ -42,7 +42,7 @@ class AsyncSolrClientSpec extends StandardFunSpec {
       val response = solr.query(query)
 
       awaitReady(response)
-      a [RuntimeException] should be thrownBy await(response)
+      a[RuntimeException] should be thrownBy await(response)
 
       ahc.close()
     }
@@ -60,7 +60,8 @@ class AsyncSolrClientSpec extends StandardFunSpec {
 
     it("should not shutdown http client if it was provided") {
       val ahcMock = mock[AsyncHttpClient]
-      val solr = AsyncSolrClient.Builder("http://localhost:12345/solr").withHttpClient(ahcMock).build
+      val solr =
+        AsyncSolrClient.Builder("http://localhost:12345/solr").withHttpClient(ahcMock).build
 
       solr.shutdown()
 

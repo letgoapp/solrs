@@ -18,21 +18,24 @@ import scala.concurrent.duration._
 import scala.util.control.NonFatal
 
 /**
- * Integration test for AsyncSolrClient with CloudSolrServers + RoundRobinLB + RetryPolicy.TryAvailableServers.
- * RetryPolicy.TryAvailableServers is needed because for a restarted server the status is not updated
- * fast enough.
- */
+  * Integration test for AsyncSolrClient with CloudSolrServers + RoundRobinLB + RetryPolicy.TryAvailableServers.
+  * RetryPolicy.TryAvailableServers is needed because for a restarted server the status is not updated
+  * fast enough.
+  */
 //noinspection RedundantDefaultArgument
-class AsyncSolrClientCloudIntegrationSpec extends StandardFunSpec with Eventually with IntegrationPatience {
+class AsyncSolrClientCloudIntegrationSpec
+    extends StandardFunSpec
+    with Eventually
+    with IntegrationPatience {
 
-  private implicit val timeout: FiniteDuration = 5.second
+  implicit private val timeout: FiniteDuration = 5.second
 
   private var solrRunner: SolrCloudRunner = _
-  private def solrServerUrls = solrRunner.solrCoreUrls
+  private def solrServerUrls              = solrRunner.solrCoreUrls
 
   private var solrServers: CloudSolrServers[Future] = _
-  private var cut: AsyncSolrClient[Future] = _
-  private var solrJClient: CloudSolrClient = _
+  private var cut: AsyncSolrClient[Future]          = _
+  private var solrJClient: CloudSolrClient          = _
 
   private val collection1 = "collection1"
   private val collection2 = "collection2"
@@ -57,10 +60,14 @@ class AsyncSolrClientCloudIntegrationSpec extends StandardFunSpec with Eventuall
     solrServers = new CloudSolrServers(
       solrRunner.zkAddress,
       clusterStateUpdateInterval = 100 millis,
-      defaultCollection = Some(collection1))
+      defaultCollection = Some(collection1)
+    )
     // We need to configure a retry policy as otherwise requests fail because server status is not
     // updated fast enough...
-    cut = AsyncSolrClient.Builder(RoundRobinLB(solrServers)).withRetryPolicy(RetryPolicy.TryAvailableServers).build
+    cut = AsyncSolrClient
+      .Builder(RoundRobinLB(solrServers))
+      .withRetryPolicy(RetryPolicy.TryAvailableServers)
+      .build
 
     eventually(Timeout(10 seconds)) {
       solrJClient.deleteByQuery("*:*")
@@ -119,7 +126,7 @@ class AsyncSolrClientCloudIntegrationSpec extends StandardFunSpec with Eventuall
       responseFutures.length should be > 0
 
       responseFutures.foreach { response =>
-        response.value.get.isSuccess should be (true)
+        response.value.get.isSuccess should be(true)
         await(response) should contain theSameElementsAs someDocsIds
       }
 
@@ -150,7 +157,7 @@ class AsyncSolrClientCloudIntegrationSpec extends StandardFunSpec with Eventuall
       responseFutures.length should be > 0
 
       responseFutures.foreach { response =>
-        response.value.get.isSuccess should be (true)
+        response.value.get.isSuccess should be(true)
         await(response) should contain theSameElementsAs someDocsIds
       }
 
@@ -166,10 +173,12 @@ class AsyncSolrClientCloudIntegrationSpec extends StandardFunSpec with Eventuall
       solrJClient.add(collection2, otherDocs.asJava)
       solrJClient.commit(collection2)
 
-      val alias = "testalias"
+      val alias         = "testalias"
       val aliasCombined = "testaliascombined"
       CollectionAdminRequest.createAlias(alias, collection1).process(solrJClient)
-      CollectionAdminRequest.createAlias(aliasCombined, collection1 + "," + collection2).process(solrJClient)
+      CollectionAdminRequest
+        .createAlias(aliasCombined, collection1 + "," + collection2)
+        .process(solrJClient)
 
       // ensure that the alias has been registered// ensure that the aliases have been registered
       var aliases = new CollectionAdminRequest.ListAliases().process(solrJClient).getAliases
@@ -191,28 +200,33 @@ class AsyncSolrClientCloudIntegrationSpec extends StandardFunSpec with Eventuall
       }
 
       // verify that combined alias returns docs from all target collections
-      someDocsIds ::: otherDocsIds should not contain theSameElementsAs (someDocsIds)
+      someDocsIds ::: otherDocsIds should not contain theSameElementsAs(someDocsIds)
       await(cut.query(aliasCombined, q).map(getIds)) should contain theSameElementsAs (someDocsIds ::: otherDocsIds)
 
     }
 
   }
 
-  private def awaitAllServersBeingEnabled(): Assertion = {
+  private def awaitAllServersBeingEnabled(): Assertion =
     eventually {
-      cut.loadBalancer.solrServers.all.map(_.status) should contain theSameElementsAs solrServerUrls.map(_ => Enabled)
+      cut.loadBalancer.solrServers.all.map(_.status) should contain theSameElementsAs solrServerUrls
+        .map(_ => Enabled)
     }
-  }
 
   @tailrec
-  private def runQueries(q: SolrQuery, run: AtomicBoolean, res: List[Future[List[String]]] = Nil): List[Future[List[String]]] = if (run.get()) {
-    val response = cut.query(q).map(getIds)
-    response.failed.foreach {
-      case NonFatal(e) => logger.error("Query failed.", e)
+  private def runQueries(
+      q: SolrQuery,
+      run: AtomicBoolean,
+      res: List[Future[List[String]]] = Nil
+    ): List[Future[List[String]]] =
+    if (run.get()) {
+      val response = cut.query(q).map(getIds)
+      response.failed.foreach {
+        case NonFatal(e) => logger.error("Query failed.", e)
+      }
+      runQueries(q, run, awaitReady(response) :: res)
+    } else {
+      res
     }
-    runQueries(q, run, awaitReady(response) :: res)
-  } else {
-    res
-  }
 
 }

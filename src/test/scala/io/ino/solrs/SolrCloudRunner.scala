@@ -32,11 +32,12 @@ case class SolrCollection(name: String, replicas: Int = 1, shards: Int = 1)
   * @param maybeSolrHome     (optional) a Solr home dir to use, tries to locate resource /solr-home in classpath if not specified
   *
   */
-class SolrCloudRunner(numServers: Int, collections: List[SolrCollection] = List.empty,
-                      defaultCollection: Option[String] = None,
-                      maybeZkPort: Option[Int],
-                      maybeSolrHome: Option[Path] = None) {
-
+class SolrCloudRunner(
+    numServers: Int,
+    collections: List[SolrCollection] = List.empty,
+    defaultCollection: Option[String] = None,
+    maybeZkPort: Option[Int],
+    maybeSolrHome: Option[Path] = None) {
 
   import SolrCloudRunner._
 
@@ -76,25 +77,35 @@ class SolrCloudRunner(numServers: Int, collections: List[SolrCollection] = List.
 
     timed("Starting Solr ZK Test Server") {
       val dataDir = baseDir.resolve("zookeeper/server1/data").toString
-      zookeeper = maybeZkPort.map(zkPort => new ZkTestServer(dataDir, zkPort)).getOrElse(new ZkTestServer(dataDir))
+      zookeeper = maybeZkPort
+        .map(zkPort => new ZkTestServer(dataDir, zkPort))
+        .getOrElse(new ZkTestServer(dataDir))
       startZk(zookeeper)
     }
 
     timed(s"Starting Mini Solr Cloud cluster with $numServers node(s)") {
-      miniSolrCloudCluster = new MiniSolrCloudCluster(numServers, solrHome, MiniSolrCloudCluster.DEFAULT_CLOUD_SOLR_XML,
-        new JettyConfig.Builder().build(), zookeeper)
+      miniSolrCloudCluster = new MiniSolrCloudCluster(
+        numServers,
+        solrHome,
+        MiniSolrCloudCluster.DEFAULT_CLOUD_SOLR_XML,
+        new JettyConfig.Builder().build(),
+        zookeeper
+      )
     }
 
     for (coll <- collections) {
       val collectionName = coll.name
       // just use collection name = config name
       val configName = collectionName
-      val confDir = solrHome.resolve(collectionName).resolve("conf")
+      val confDir    = solrHome.resolve(collectionName).resolve("conf")
       timed(s"Uploading config '$configName' for collection '$collectionName' from $confDir") {
         miniSolrCloudCluster.uploadConfigSet(confDir, configName)
       }
-      val result = timed(s"Creating collection '$collectionName' with replicas=${coll.replicas} and shards=${coll.shards}") {
-        CollectionAdminRequest.createCollection(collectionName, configName, coll.shards, coll.replicas)
+      val result = timed(
+        s"Creating collection '$collectionName' with replicas=${coll.replicas} and shards=${coll.shards}"
+      ) {
+        CollectionAdminRequest
+          .createCollection(collectionName, configName, coll.shards, coll.replicas)
           .process(miniSolrCloudCluster.getSolrClient)
       }
       logger.info(s"Success: ${result.isSuccess}, Status: ${result.getCollectionStatus}")
@@ -153,13 +164,12 @@ class SolrCloudRunner(numServers: Int, collections: List[SolrCollection] = List.
     zk.run()
   }
 
-  def solrCoreUrls: List[String] = {
+  def solrCoreUrls: List[String] =
     jettySolrRunners.flatMap { jetty =>
       jetty.getCoreContainer.getAllCoreNames.asScala.map { coreName =>
         s"http://127.0.0.1:${jetty.getLocalPort}/solr/$coreName"
       }
     }
-  }
 
   private def makeSolrHomeDirIn(baseDir: Path): Path = {
     val solrHomeSourceDir = maybeSolrHome.map(_.toFile).getOrElse {
@@ -171,16 +181,15 @@ class SolrCloudRunner(numServers: Int, collections: List[SolrCollection] = List.
     solrHome
   }
 
-  private def createBaseDir(): Path = {
+  private def createBaseDir(): Path =
     Files.createDirectories(tmpDir.resolve("base" + System.currentTimeMillis()))
-  }
 
   private def tmpDir: Path = Paths.get(System.getProperty("java.io.tmpdir"))
 
   private def timed[T](description: String)(f: => T): T = {
     logger.info(description)
     val start = System.nanoTime()
-    val res = f
+    val res   = f
     logger.info(s"$description took ${TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)} ms")
     res
   }
@@ -190,10 +199,15 @@ object SolrCloudRunner {
 
   private val logger: Logger = LoggerFactory.getLogger(classOf[SolrCloudRunner])
 
-  def start(numServers: Int, collections: List[SolrCollection] = List.empty, defaultCollection: Option[String] = None,
-            maybeZkPort: Option[Int] = None, maybeSolrHome: Option[Path] = None): SolrCloudRunner = {
-    new SolrCloudRunner(numServers, collections, defaultCollection, maybeZkPort, maybeSolrHome).start()
-  }
+  def start(
+      numServers: Int,
+      collections: List[SolrCollection] = List.empty,
+      defaultCollection: Option[String] = None,
+      maybeZkPort: Option[Int] = None,
+      maybeSolrHome: Option[Path] = None
+    ): SolrCloudRunner =
+    new SolrCloudRunner(numServers, collections, defaultCollection, maybeZkPort, maybeSolrHome)
+      .start()
 
 }
 

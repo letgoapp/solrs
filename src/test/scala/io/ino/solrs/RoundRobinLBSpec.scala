@@ -29,7 +29,8 @@ class RoundRobinLBSpec extends FunSpec with Matchers {
     it("should return None if no solr server matches") {
       val nonMatchingServers = new SolrServers {
         override def all: Seq[SolrServer] = Nil
-        override def matching(r: SolrRequest[_]): Try[IndexedSeq[SolrServer]] = Success(Vector.empty)
+        override def matching(r: SolrRequest[_]): Try[IndexedSeq[SolrServer]] =
+          Success(Vector.empty)
       }
       val cut = RoundRobinLB(nonMatchingServers)
 
@@ -39,27 +40,27 @@ class RoundRobinLBSpec extends FunSpec with Matchers {
     it("should return consecutive solr servers") {
       val cut = RoundRobinLB(IndexedSeq("host1", "host2"))
 
-      cut.solrServer(q) should be (Success(SolrServer("host2")))
-      cut.solrServer(q) should be (Success(SolrServer("host1")))
-      cut.solrServer(q) should be (Success(SolrServer("host2")))
-      cut.solrServer(q) should be (Success(SolrServer("host1")))
+      cut.solrServer(q) should be(Success(SolrServer("host2")))
+      cut.solrServer(q) should be(Success(SolrServer("host1")))
+      cut.solrServer(q) should be(Success(SolrServer("host2")))
+      cut.solrServer(q) should be(Success(SolrServer("host1")))
     }
 
     it("should only return active solr servers") {
       val servers = IndexedSeq(SolrServer("host1"), SolrServer("host2"))
-      val cut = new RoundRobinLB(new StaticSolrServers(servers))
+      val cut     = new RoundRobinLB(new StaticSolrServers(servers))
 
-      cut.solrServer(q) should be (Success(SolrServer("host2")))
-      cut.solrServer(q) should be (Success(SolrServer("host1")))
-      cut.solrServer(q) should be (Success(SolrServer("host2")))
+      cut.solrServer(q) should be(Success(SolrServer("host2")))
+      cut.solrServer(q) should be(Success(SolrServer("host1")))
+      cut.solrServer(q) should be(Success(SolrServer("host2")))
 
       servers(0).status = Disabled
-      cut.solrServer(q) should be (Success(SolrServer("host2")))
+      cut.solrServer(q) should be(Success(SolrServer("host2")))
 
       servers(0).status = Enabled
       servers(1).status = Failed
-      cut.solrServer(q) should be (Success(SolrServer("host1")))
-      cut.solrServer(q) should be (Success(SolrServer("host1")))
+      cut.solrServer(q) should be(Success(SolrServer("host1")))
+      cut.solrServer(q) should be(Success(SolrServer("host1")))
 
       servers(0).status = Disabled
       cut.solrServer(q) shouldBe a[Failure[_]]
@@ -70,18 +71,19 @@ class RoundRobinLBSpec extends FunSpec with Matchers {
       val server2 = shardReplica("host2", isLeader = false)
       val servers = IndexedSeq(server1, server2)
       val cut = new RoundRobinLB(new StaticSolrServers(servers) {
-        override def findLeader(servers: Iterable[SolrServer]): Option[ShardReplica] = ShardReplica.findLeader(servers)
+        override def findLeader(servers: Iterable[SolrServer]): Option[ShardReplica] =
+          ShardReplica.findLeader(servers)
       })
 
       val q = new UpdateRequest()
 
-      cut.solrServer(q) should be (Success(server1))
-      cut.solrServer(q) should be (Success(server1))
-      cut.solrServer(q) should be (Success(server1))
+      cut.solrServer(q) should be(Success(server1))
+      cut.solrServer(q) should be(Success(server1))
+      cut.solrServer(q) should be(Success(server1))
 
       servers(0).status = Disabled
-      cut.solrServer(q) should be (Success(server2))
-      cut.solrServer(q) should be (Success(server2))
+      cut.solrServer(q) should be(Success(server2))
+      cut.solrServer(q) should be(Success(server2))
     }
 
     it("should return replicas matching the given shard preferences / replica type") {
@@ -89,29 +91,35 @@ class RoundRobinLBSpec extends FunSpec with Matchers {
       val server2 = shardReplica("host2", replicaType = TLOG)
       val server3 = shardReplica("host3", replicaType = PULL)
       val servers = IndexedSeq(server1, server2, server3)
-      val cut = new RoundRobinLB(new StaticSolrServers(servers))
+      val cut     = new RoundRobinLB(new StaticSolrServers(servers))
 
       // shards.preference=replica.location:local,replica.type:PULL,replica.type:TLOG
-      def q(replicaTypes: Replica.Type*) = new QueryRequest(
-        new SolrQuery("foo")
-          .setParam(
-            SHARDS_PREFERENCE,
-            "replica.location:local," + // just some noice to test the parsing
-            replicaTypes.mkString(s"$SHARDS_PREFERENCE_REPLICA_TYPE:", s",$SHARDS_PREFERENCE_REPLICA_TYPE:", ""
-          )))
+      def q(replicaTypes: Replica.Type*) =
+        new QueryRequest(
+          new SolrQuery("foo")
+            .setParam(
+              SHARDS_PREFERENCE,
+              "replica.location:local," + // just some noice to test the parsing
+                replicaTypes.mkString(
+                  s"$SHARDS_PREFERENCE_REPLICA_TYPE:",
+                  s",$SHARDS_PREFERENCE_REPLICA_TYPE:",
+                  ""
+                )
+            )
+        )
 
       // don't test expecing server1, 2, 3 since this would be the default RR result anyways...
-      cut.solrServer(q(PULL)) should be (Success(server3))
-      cut.solrServer(q(PULL)) should be (Success(server3))
-      cut.solrServer(q(TLOG)) should be (Success(server2))
-      cut.solrServer(q(TLOG)) should be (Success(server2))
-      cut.solrServer(q(NRT)) should be (Success(server1))
-      cut.solrServer(q(NRT)) should be (Success(server1))
+      cut.solrServer(q(PULL)) should be(Success(server3))
+      cut.solrServer(q(PULL)) should be(Success(server3))
+      cut.solrServer(q(TLOG)) should be(Success(server2))
+      cut.solrServer(q(TLOG)) should be(Success(server2))
+      cut.solrServer(q(NRT)) should be(Success(server1))
+      cut.solrServer(q(NRT)) should be(Success(server1))
 
-      cut.solrServer(q(TLOG, PULL)) should (be (Success(server2)) or be (Success(server3)))
-      cut.solrServer(q(PULL, TLOG)) should (be (Success(server2)) or be (Success(server3)))
-      cut.solrServer(q(NRT, PULL)) should (be (Success(server1)) or be (Success(server3)))
-      cut.solrServer(q(PULL, NRT)) should (be (Success(server1)) or be (Success(server3)))
+      cut.solrServer(q(TLOG, PULL)) should (be(Success(server2)) or be(Success(server3)))
+      cut.solrServer(q(PULL, TLOG)) should (be(Success(server2)) or be(Success(server3)))
+      cut.solrServer(q(NRT, PULL)) should (be(Success(server1)) or be(Success(server3)))
+      cut.solrServer(q(PULL, NRT)) should (be(Success(server1)) or be(Success(server3)))
 
       servers(0).status = Disabled
       cut.solrServer(q(NRT, PULL)) shouldBe Success(server3)
@@ -119,15 +127,15 @@ class RoundRobinLBSpec extends FunSpec with Matchers {
 
     it("should consider the preferred server if active") {
       val servers = IndexedSeq(SolrServer("host1"), SolrServer("host2"))
-      val cut = new RoundRobinLB(new StaticSolrServers(servers))
+      val cut     = new RoundRobinLB(new StaticSolrServers(servers))
 
       val preferred = Some(SolrServer("host2"))
 
-      cut.solrServer(q, preferred) should be (Success(preferred.get))
-      cut.solrServer(q, preferred) should be (Success(preferred.get))
+      cut.solrServer(q, preferred) should be(Success(preferred.get))
+      cut.solrServer(q, preferred) should be(Success(preferred.get))
 
       servers(1).status = Failed
-      cut.solrServer(q, preferred) should be (Success(SolrServer("host1")))
+      cut.solrServer(q, preferred) should be(Success(SolrServer("host1")))
     }
   }
 

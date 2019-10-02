@@ -12,43 +12,42 @@ import scala.concurrent.{Future => SFuture}
 
 class ScalaFutureFactorySpec extends FutureFactorySpec[SFuture] with FutureAwaits {
   import scala.concurrent.duration._
-  override protected lazy val factory = ScalaFutureFactory
+  override protected lazy val factory                        = ScalaFutureFactory
   override protected def awaitBase[T](future: SFuture[T]): T = await(future)(1.second)
 }
 
 class TwitterFutureFactorySpec extends FutureFactorySpec[TFuture] with FutureAwaits {
   import com.twitter.conversions.DurationOps._
   import com.twitter.util.Await
-  override protected lazy val factory = TwitterFutureFactory
+  override protected lazy val factory                        = TwitterFutureFactory
   override protected def awaitBase[T](future: TFuture[T]): T = Await.result(future, 1.second)
 }
 
 class JavaFutureFactorySpec extends FutureFactorySpec[CompletionStage] with FutureAwaits {
   override protected lazy val factory = new JavaFutureFactory
-  override protected def awaitBase[T](future: CompletionStage[T]): T = {
+  override protected def awaitBase[T](future: CompletionStage[T]): T =
     try {
       future.toCompletableFuture.get(1, TimeUnit.SECONDS)
     } catch {
       case e: ExecutionException => throw e.getCause
     }
-  }
 }
 
 abstract class FutureFactorySpec[BaseFuture[_]] extends FunSpec with Matchers with MockitoSugar {
 
-  protected implicit def factory: FutureFactory[BaseFuture]
+  implicit protected def factory: FutureFactory[BaseFuture]
   protected def awaitBase[T](future: BaseFuture[T]): T
 
   private lazy val classUnderTest = {
     val res = factory.getClass.getSimpleName
-    if(res.endsWith("$")) res.dropRight(1) else res
+    if (res.endsWith("$")) res.dropRight(1) else res
   }
 
   describe(classUnderTest) {
 
     it("should return promise/future that supports map") {
       val (promise, future) = promiseAndFuture[String]
-      val res = future.map(_.toUpperCase)
+      val res               = future.map(_.toUpperCase)
       promise.success("foo")
       res.get shouldBe "FOO"
     }
@@ -78,7 +77,7 @@ abstract class FutureFactorySpec[BaseFuture[_]] extends FunSpec with Matchers wi
 
     it("should return promise/future that supports flatMap (failure in callback)") {
       val (promise, future) = promiseAndFuture[String]
-      val futureException = new RuntimeException("fail!")
+      val futureException   = new RuntimeException("fail!")
       val res = future.flatMap { v =>
         val futurePromise = factory.newPromise[String]
         futurePromise.failure(futureException)
@@ -90,9 +89,10 @@ abstract class FutureFactorySpec[BaseFuture[_]] extends FunSpec with Matchers wi
 
     it("should return promise/future that supports handle (unhandled)") {
       testHandleUnhandled { (future, handledRef) =>
-        future.handle { case e: UnhandledException =>
-          handledRef.set(e)
-          "should not be used!"
+        future.handle {
+          case e: UnhandledException =>
+            handledRef.set(e)
+            "should not be used!"
         }
       }
     }
@@ -100,9 +100,10 @@ abstract class FutureFactorySpec[BaseFuture[_]] extends FunSpec with Matchers wi
     it("should return promise/future that supports handle (success)") {
       testHandleSuccess { (future, handledRef) =>
         val res = "handled"
-        (future.handle { case e =>
-          handledRef.set(e)
-          res
+        (future.handle {
+          case e =>
+            handledRef.set(e)
+            res
         }, res)
       }
     }
@@ -110,18 +111,20 @@ abstract class FutureFactorySpec[BaseFuture[_]] extends FunSpec with Matchers wi
     it("should return promise/future that supports handle (failure)") {
       testHandleFailure { (future, handledRef) =>
         val futureException = new RuntimeException("fail!")
-        (future.handle { case e =>
-          handledRef.set(e)
-          throw futureException
+        (future.handle {
+          case e =>
+            handledRef.set(e)
+            throw futureException
         }, futureException)
       }
     }
 
     it("should return promise/future that supports handleWith (unhandled)") {
       testHandleUnhandled { (future, handledRef) =>
-        future.handleWith { case e: UnhandledException =>
-          handledRef.set(e)
-          factory.failed(new RuntimeException("should not be thrown!"))
+        future.handleWith {
+          case e: UnhandledException =>
+            handledRef.set(e)
+            factory.failed(new RuntimeException("should not be thrown!"))
         }
       }
     }
@@ -129,11 +132,12 @@ abstract class FutureFactorySpec[BaseFuture[_]] extends FunSpec with Matchers wi
     it("should return promise/future that supports handleWith (success)") {
       testHandleSuccess { (future, handledRef) =>
         val res = "handled"
-        (future.handleWith { case e =>
-          handledRef.set(e)
-          val handlerPromise = factory.newPromise[String]
-          handlerPromise.success(res)
-          handlerPromise.future
+        (future.handleWith {
+          case e =>
+            handledRef.set(e)
+            val handlerPromise = factory.newPromise[String]
+            handlerPromise.success(res)
+            handlerPromise.future
         }, res)
       }
     }
@@ -141,9 +145,10 @@ abstract class FutureFactorySpec[BaseFuture[_]] extends FunSpec with Matchers wi
     it("should return promise/future that supports handleWith (failure)") {
       testHandleFailure { (future, handledRef) =>
         val futureException = new RuntimeException("fail!")
-        (future.handleWith { case e =>
-          handledRef.set(e)
-          factory.failed(futureException)
+        (future.handleWith {
+          case e =>
+            handledRef.set(e)
+            factory.failed(futureException)
         }, futureException)
       }
     }
@@ -155,7 +160,7 @@ abstract class FutureFactorySpec[BaseFuture[_]] extends FunSpec with Matchers wi
       FutureFactory.sequence(Seq(future1)).get shouldBe Seq("foo")
 
       val (promise2, future2) = promiseAndFuture[String]
-      val ex = new scala.IllegalArgumentException("future2fail")
+      val ex                  = new scala.IllegalArgumentException("future2fail")
       promise2.failure(ex)
 
       the[Throwable] thrownBy FutureFactory.sequence(Seq(future1, future2)).get shouldBe ex
@@ -168,11 +173,13 @@ abstract class FutureFactorySpec[BaseFuture[_]] extends FunSpec with Matchers wi
     (promise, promise.future)
   }
 
-  private def testHandleUnhandled(handle: (Future[String], AtomicReference[Throwable]) => Future[String]): Unit = {
+  private def testHandleUnhandled(
+      handle: (Future[String], AtomicReference[Throwable]) => Future[String]
+    ): Unit = {
     val (promise, future) = promiseAndFuture[String]
 
     val handled = new AtomicReference[Throwable]()
-    val res = handle(future, handled)
+    val res     = handle(future, handled)
 
     val ex = new scala.IllegalArgumentException("foo")
     promise.failure(ex)
@@ -181,10 +188,12 @@ abstract class FutureFactorySpec[BaseFuture[_]] extends FunSpec with Matchers wi
     the[Throwable] thrownBy res.get shouldBe ex
   }
 
-  private def testHandleSuccess(handle: (Future[String], AtomicReference[Throwable]) => (Future[String], String)): Unit = {
+  private def testHandleSuccess(
+      handle: (Future[String], AtomicReference[Throwable]) => (Future[String], String)
+    ): Unit = {
     val (promise, future) = promiseAndFuture[String]
 
-    val handled = new AtomicReference[Throwable]()
+    val handled              = new AtomicReference[Throwable]()
     val (res, expectedValue) = handle(future, handled)
 
     val ex = new scala.IllegalArgumentException("foo")
@@ -194,10 +203,12 @@ abstract class FutureFactorySpec[BaseFuture[_]] extends FunSpec with Matchers wi
     res.get shouldBe expectedValue
   }
 
-  private def testHandleFailure(handle: (Future[String], AtomicReference[Throwable]) => (Future[String], Throwable)): Unit = {
+  private def testHandleFailure(
+      handle: (Future[String], AtomicReference[Throwable]) => (Future[String], Throwable)
+    ): Unit = {
     val (promise, future) = promiseAndFuture[String]
 
-    val handled = new AtomicReference[Throwable]()
+    val handled                  = new AtomicReference[Throwable]()
     val (res, expectedException) = handle(future, handled)
 
     val ex = new scala.IllegalArgumentException("foo")
@@ -208,7 +219,7 @@ abstract class FutureFactorySpec[BaseFuture[_]] extends FunSpec with Matchers wi
     the[Throwable] thrownBy res.get shouldBe expectedException
   }
 
-  private implicit class RichFuture[T](f: Future[T]) {
+  implicit private class RichFuture[T](f: Future[T]) {
     def get: T = awaitBase(factory.toBase(f))
   }
 

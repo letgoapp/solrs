@@ -15,15 +15,25 @@ import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach, FunSpec, Matchers}
 
 import scala.concurrent.duration._
 
-class PingStatusObserverIntegrationSpec extends FunSpec with BeforeAndAfterAll with Eventually with IntegrationPatience with BeforeAndAfterEach with Matchers with FutureAwaits with MockitoSugar {
+class PingStatusObserverIntegrationSpec
+    extends FunSpec
+    with BeforeAndAfterAll
+    with Eventually
+    with IntegrationPatience
+    with BeforeAndAfterEach
+    with Matchers
+    with FutureAwaits
+    with MockitoSugar {
 
   import PingStatusObserverIntegrationSpec._
 
-  private implicit val awaitTimeout = 2000 millis
-  private val httpClientTimeout = 100
-  private val httpClient = new DefaultAsyncHttpClient(new DefaultAsyncHttpClientConfig.Builder().setRequestTimeout(httpClientTimeout).build)
+  implicit private val awaitTimeout = 2000 millis
+  private val httpClientTimeout     = 100
+  private val httpClient = new DefaultAsyncHttpClient(
+    new DefaultAsyncHttpClientConfig.Builder().setRequestTimeout(httpClientTimeout).build
+  )
 
-  protected var solrRunner: SolrRunner = _
+  protected var solrRunner: SolrRunner      = _
   protected var solrJClient: HttpSolrClient = _
 
   private lazy val solrUrl = s"http://localhost:${solrRunner.port}/solr/collection1"
@@ -55,46 +65,46 @@ class PingStatusObserverIntegrationSpec extends FunSpec with BeforeAndAfterAll w
 
   describe("PingStatusObserver") {
 
-    lazy val solrServers = Seq(SolrServer(solrUrl))
+    lazy val solrServers        = Seq(SolrServer(solrUrl))
     lazy val pingStatusObserver = new PingStatusObserver(solrServers, httpClient)
 
     it("should update status base on ping status") {
       await(pingStatusObserver.checkServerStatus())
-      solrServers(0).status should be (Enabled)
+      solrServers(0).status should be(Enabled)
 
       disable(solrUrl)
       await(pingStatusObserver.checkServerStatus())
-      solrServers(0).status should be (Disabled)
+      solrServers(0).status should be(Disabled)
     }
 
     it("should disable server on status != 200") {
       await(pingStatusObserver.checkServerStatus())
-      solrServers(0).status should be (Enabled)
+      solrServers(0).status should be(Enabled)
 
       doReturn404.set(true)
 
       eventually(Timeout(awaitTimeout)) {
         try {
-          pingAction(solrUrl, "status").getStatusCode should be (404)
+          pingAction(solrUrl, "status").getStatusCode should be(404)
         } catch {
           case e: ExecutionException if e.getCause.isInstanceOf[TimeoutException] =>
-            // that's fine as well, alternatively to a 404...
+          // that's fine as well, alternatively to a 404...
         }
       }
 
       await(pingStatusObserver.checkServerStatus())
-      solrServers(0).status should be (Failed)
+      solrServers(0).status should be(Failed)
 
     }
 
     it("should disable server on read timeout") {
 
       await(pingStatusObserver.checkServerStatus())
-      solrServers(0).status should be (Enabled)
+      solrServers(0).status should be(Enabled)
 
       responseDelayMillis.set(5000)
       val httpClientConfig = new DefaultAsyncHttpClientConfig.Builder().setReadTimeout(100).build()
-      val asyncHttpClient = new DefaultAsyncHttpClient(httpClientConfig)
+      val asyncHttpClient  = new DefaultAsyncHttpClient(httpClientConfig)
       try {
 
         eventually {
@@ -113,13 +123,13 @@ class PingStatusObserverIntegrationSpec extends FunSpec with BeforeAndAfterAll w
 
     it("should disable server on connection error") {
       await(pingStatusObserver.checkServerStatus())
-      solrServers(0).status should be (Enabled)
+      solrServers(0).status should be(Enabled)
 
       SolrRunner.stopJetty(solrRunner.jetty)
 
       eventually {
-        val thrown = the [ExecutionException] thrownBy pingAction(solrUrl, "status")
-        thrown.getCause shouldBe a [ConnectException]
+        val thrown = the[ExecutionException] thrownBy pingAction(solrUrl, "status")
+        thrown.getCause shouldBe a[ConnectException]
       }
 
       // We know that the httpClient will throw a ConnectException, which was not the case with the one
@@ -127,15 +137,23 @@ class PingStatusObserverIntegrationSpec extends FunSpec with BeforeAndAfterAll w
       val pingStatusObserver2 = new PingStatusObserver(solrServers, httpClient)
 
       awaitReady(pingStatusObserver2.checkServerStatus())
-      solrServers(0).status should be (Failed)
+      solrServers(0).status should be(Failed)
     }
 
   }
 
-  private def enable(solrUrl: String, timeoutInMillis: Long = 600) = pingAction(solrUrl, "enable", timeoutInMillis)
+  private def enable(solrUrl: String, timeoutInMillis: Long = 600) =
+    pingAction(solrUrl, "enable", timeoutInMillis)
   private def disable(solrUrl: String) = pingAction(solrUrl, "disable")
-  private def pingAction(solrUrl: String, action: String, timeoutInMillis: Long = httpClientTimeout * 2) =
-    httpClient.prepareGet(s"$solrUrl/admin/ping?action=$action").execute().get(timeoutInMillis, TimeUnit.MILLISECONDS)
+  private def pingAction(
+      solrUrl: String,
+      action: String,
+      timeoutInMillis: Long = httpClientTimeout * 2
+    ) =
+    httpClient
+      .prepareGet(s"$solrUrl/admin/ping?action=$action")
+      .execute()
+      .get(timeoutInMillis, TimeUnit.MILLISECONDS)
 
 }
 
@@ -155,7 +173,11 @@ object PingStatusObserverIntegrationSpec {
 
     override def destroy(): Unit = isOn.set(false)
 
-    override def doFilter(request: ServletRequest, response: ServletResponse, chain: FilterChain): Unit = {
+    override def doFilter(
+        request: ServletRequest,
+        response: ServletResponse,
+        chain: FilterChain
+      ): Unit = {
       if (isOn.get()) {
         if (doReturn404.get()) {
           response.asInstanceOf[HttpServletResponse].sendError(404)

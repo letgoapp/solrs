@@ -9,13 +9,13 @@ import scala.concurrent.duration._
 
 class SolrServersSpec extends FunSpec with Matchers with FutureAwaits {
 
-  private val q = new QueryRequest(new SolrQuery("foo"))
-  private implicit val timeout = 1.second
+  private val q                = new QueryRequest(new SolrQuery("foo"))
+  implicit private val timeout = 1.second
 
   describe("StaticSolrServers") {
     it("should return consecutive solr servers") {
       val solrServers = IndexedSeq(SolrServer("host1"), SolrServer("host2"))
-      val cut = new StaticSolrServers(solrServers)
+      val cut         = new StaticSolrServers(solrServers)
 
       val found = cut.matching(q).get
 
@@ -26,9 +26,8 @@ class SolrServersSpec extends FunSpec with Matchers with FutureAwaits {
   describe("ReloadingSolrServers") {
     it("should return iterator that reflects updated solr servers") {
 
-      def parse(data: Array[Byte]): IndexedSeq[SolrServer] = {
+      def parse(data: Array[Byte]): IndexedSeq[SolrServer] =
         new String(data).split(",").map(SolrServer(_))
-      }
 
       var data = "host1,host2"
 
@@ -46,7 +45,10 @@ class SolrServersSpec extends FunSpec with Matchers with FutureAwaits {
       await(cut.reload())
 
       cut.all should have size (2)
-      cut.matching(q).get should contain theSameElementsAs Seq(SolrServer("host1"), SolrServer("host2"))
+      cut.matching(q).get should contain theSameElementsAs Seq(
+        SolrServer("host1"),
+        SolrServer("host2")
+      )
 
     }
   }

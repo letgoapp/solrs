@@ -31,12 +31,10 @@ trait Future[+T] {
   def handleWith[U >: T](pf: PartialFunction[Throwable, Future[U]]): Future[U]
 }
 
-
 abstract class FutureBase[+T] extends Future[T] {
 
   protected def mapSuccess[A, B](promise: Promise[B], f: A => B, value: A): Unit = {
-    try
-      promise.success(f(value))
+    try promise.success(f(value))
     catch {
       case err: Throwable =>
         promise.failure(err)
@@ -44,18 +42,20 @@ abstract class FutureBase[+T] extends Future[T] {
   }
 
   protected def flatMapSuccess[A, B](p: Promise[B], f: A => Future[B], value: A): Unit = {
-    try
-      f(value).onComplete {
-        case Success(x) => p.success(x)
-        case Failure(t) => p.failure(t)
-      }
-    catch {
+    try f(value).onComplete {
+      case Success(x) => p.success(x)
+      case Failure(t) => p.failure(t)
+    } catch {
       case err: Throwable =>
         p.failure(err)
     }
   }
 
-  protected def handleFailure[U >: T](p: Promise[U], pf: PartialFunction[Throwable, U], t: Throwable): Unit = {
+  protected def handleFailure[U >: T](
+      p: Promise[U],
+      pf: PartialFunction[Throwable, U],
+      t: Throwable
+    ): Unit = {
     try {
       if (pf.isDefinedAt(t)) p.success(pf(t))
       else p.failure(t)
@@ -64,18 +64,22 @@ abstract class FutureBase[+T] extends Future[T] {
     }
   }
 
-  protected def handleWithFailure[U >: T](p: Promise[U], pf: PartialFunction[Throwable, Future[U]], t: Throwable): Any = {
+  protected def handleWithFailure[U >: T](
+      p: Promise[U],
+      pf: PartialFunction[Throwable, Future[U]],
+      t: Throwable
+    ): Any =
     try {
       val x = pf.applyOrElse(t, (_: Throwable) => this)
-      x.map {
-        v => p.success(v)
-      }.handle {
-        case NonFatal(e) => p.failure(e)
-      }
+      x.map { v =>
+          p.success(v)
+        }
+        .handle {
+          case NonFatal(e) => p.failure(e)
+        }
     } catch {
       case NonFatal(e) => p failure e
     }
-  }
 
 }
 
@@ -113,12 +117,13 @@ private[solrs] object FutureFactory {
     *  Implemented not directly in class FutureFactory because this would be impossible to be implemented
     *  by a java FutureFactory.
     */
-  def sequence[A, M[_] <: TraversableOnce[_], X[_]](in: M[Future[A]])
-                                             (implicit cbf: CanBuildFrom[M[Future[A]], A, M[A]],
-                                              futureFactory: FutureFactory[X]): Future[M[A]] = {
+  def sequence[A, M[_] <: TraversableOnce[_], X[_]](
+      in: M[Future[A]]
+    )(implicit cbf: CanBuildFrom[M[Future[A]], A, M[A]],
+      futureFactory: FutureFactory[X]
+    ): Future[M[A]] =
     in.foldLeft(futureFactory.successful(cbf(in))) { (fr, fa) =>
       for (r <- fr; a <- fa.asInstanceOf[Future[A]]) yield r += a
     } map (_.result())
-  }
 
 }

@@ -12,16 +12,20 @@ object Fixtures {
       isLeader: Boolean = false
     ): ShardReplica = {
     import scala.collection.JavaConverters.mapAsJavaMapConverter
-    val leaderProps: Map[String, AnyRef] = if(isLeader) Map(ZkStateReader.LEADER_PROP -> true.toString) else Map.empty
+    val leaderProps: Map[String, AnyRef] =
+      if (isLeader) Map(ZkStateReader.LEADER_PROP -> true.toString) else Map.empty
     val replicaStatus = status match {
-      case Enabled => Replica.State.ACTIVE
+      case Enabled  => Replica.State.ACTIVE
       case Disabled => Replica.State.RECOVERING
-      case Failed => Replica.State.RECOVERY_FAILED
+      case Failed   => Replica.State.RECOVERY_FAILED
     }
-    val replica = new Replica(baseUrl, (Map[String, AnyRef](
-      ZkStateReader.STATE_PROP -> replicaStatus.toString,
-      ZkStateReader.REPLICA_TYPE -> replicaType.name()
-    ) ++ leaderProps).asJava)
+    val replica = new Replica(
+      baseUrl,
+      (Map[String, AnyRef](
+        ZkStateReader.STATE_PROP   -> replicaStatus.toString,
+        ZkStateReader.REPLICA_TYPE -> replicaType.name()
+      ) ++ leaderProps).asJava
+    )
     ShardReplica(baseUrl, replica)
   }
 

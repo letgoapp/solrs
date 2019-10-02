@@ -16,7 +16,7 @@ import scala.util.{Success, Try}
 
 class PerformanceStatsSpec extends FunSpec with Matchers with BeforeAndAfterEach {
 
-  private val clock = new MutableClock
+  private val clock       = new MutableClock
   private val queryClass1 = "q1"
 
   override def beforeEach(): Unit = {
@@ -29,7 +29,7 @@ class PerformanceStatsSpec extends FunSpec with Matchers with BeforeAndAfterEach
       val cut = new PerformanceStats(SolrServer("host1"), 0, clock)
 
       // set clock to the start of a second, so that both measurements are in the same bucket
-      val second1 =  MILLISECONDS.toSeconds(clock.millis())
+      val second1 = MILLISECONDS.toSeconds(clock.millis())
       clock.set(second1 * 1000)
 
       request(cut, 10)
@@ -45,13 +45,13 @@ class PerformanceStatsSpec extends FunSpec with Matchers with BeforeAndAfterEach
 
       // no requests at second2
 
-      val second3 =  second2 + 1
+      val second3 = second2 + 1
       clock.set(second3 * 1000)
 
       request(cut, 30)
       request(cut, 50)
 
-      val second4 =  second3 + 1
+      val second4 = second3 + 1
       clock.set(second4 * 1000)
 
       cut.updateStats()
@@ -67,7 +67,10 @@ class PerformanceStatsSpec extends FunSpec with Matchers with BeforeAndAfterEach
 
       // simulate several requests, not only 1 per second, to see how averages per second are handled
       // 6 measurements, sum = 240 => average = 40
-      requests(cut, SortedMap(0L -> 10L, 100L -> 20L, 1000L -> 30L, 6000L -> 40L, 7000L -> 60L, 7500L -> 80L))
+      requests(
+        cut,
+        SortedMap(0L -> 10L, 100L -> 20L, 1000L -> 30L, 6000L -> 40L, 7000L -> 60L, 7500L -> 80L)
+      )
 
       clock.advance(1000)
       cut.updateStats()
@@ -94,7 +97,10 @@ class PerformanceStatsSpec extends FunSpec with Matchers with BeforeAndAfterEach
 
       // simulate several requests, not only 1 per second, to see how averages per second are handled
       // 6 measurements, sum = 240 => average = 40
-      requests(cut, SortedMap(0L -> 10L, 100L -> 20L, 1000L -> 30L, 6000L -> 40L, 7000L -> 60L, 7500L -> 80L))
+      requests(
+        cut,
+        SortedMap(0L -> 10L, 100L -> 20L, 1000L -> 30L, 6000L -> 40L, 7000L -> 60L, 7500L -> 80L)
+      )
 
       clock.advance(1000)
       cut.updateStats()
@@ -103,7 +109,17 @@ class PerformanceStatsSpec extends FunSpec with Matchers with BeforeAndAfterEach
       cut.totalAverageDuration(queryClass1, 0) shouldBe 40
 
       // some more requests later
-      requests(cut, SortedMap(20000L -> 50L, 21000L -> 60L, 22000L -> 60L, 23000L -> 60L, 24000L -> 60L, 25000L -> 70L))
+      requests(
+        cut,
+        SortedMap(
+          20000L -> 50L,
+          21000L -> 60L,
+          22000L -> 60L,
+          23000L -> 60L,
+          24000L -> 60L,
+          25000L -> 70L
+        )
+      )
 
       clock.advance(5000)
       cut.updateStats()
@@ -121,13 +137,13 @@ class PerformanceStatsSpec extends FunSpec with Matchers with BeforeAndAfterEach
     }
 
     /**
-     * Currently running requests are the most useful information, at least we should assume
-     * that a new request takes at least the time a currently running request took so far.
-     * This is relevant in a scenario where e.g. a major GC is running.
-     *
-     * Of course only the times of requests should be taken into account that are so far running
-     * longer compared to the average.
-     */
+      * Currently running requests are the most useful information, at least we should assume
+      * that a new request takes at least the time a currently running request took so far.
+      * This is relevant in a scenario where e.g. a major GC is running.
+      *
+      * Of course only the times of requests should be taken into account that are so far running
+      * longer compared to the average.
+      */
     it("should predict the response time based on ongoing requests") {
       val cut = new PerformanceStats(SolrServer("host1"), 0, clock)
 
@@ -157,22 +173,30 @@ class PerformanceStatsSpec extends FunSpec with Matchers with BeforeAndAfterEach
       requests(cut, SortedMap(0L -> 10L, 1000L -> 10L, 2000L -> 10L))
       cut.updateStats()
 
-      requests(cut, SortedMap(3000L -> 100L, 3100L -> 100L, 3200L -> 100L, 3300L -> 100L, 3400L -> 100L))
+      requests(
+        cut,
+        SortedMap(3000L -> 100L, 3100L -> 100L, 3200L -> 100L, 3300L -> 100L, 3400L -> 100L)
+      )
       cut.predictDuration(queryClass1) shouldBe 100
     }
 
     /**
-     * Currently running requests should only be taken into account if they are running
-     * longer than the average.
-     */
-    it("should predict the response time based on finished requests from the current second, ignoring shorter active requests") {
+      * Currently running requests should only be taken into account if they are running
+      * longer than the average.
+      */
+    it(
+      "should predict the response time based on finished requests from the current second, ignoring shorter active requests"
+    ) {
       val cut = new PerformanceStats(SolrServer("host1"), 0, clock)
 
       // simulate some requests in the past to generate some averages in the past
       requests(cut, SortedMap(0L -> 10L, 1000L -> 10L, 2000L -> 10L))
       cut.updateStats()
 
-      requests(cut, SortedMap(3000L -> 100L, 3100L -> 100L, 3200L -> 100L, 3300L -> 100L, 3400L -> 100L))
+      requests(
+        cut,
+        SortedMap(3000L -> 100L, 3100L -> 100L, 3200L -> 100L, 3300L -> 100L, 3400L -> 100L)
+      )
 
       // first active request
       val request1 = cut.requestStarted(queryClass1)
@@ -278,7 +302,8 @@ class PerformanceStatsSpec extends FunSpec with Matchers with BeforeAndAfterEach
   }
 
   private def requests(stats: PerformanceStats, offsetAndDuration: SortedMap[Long, Long]): Unit = {
-    offsetAndDuration.foreach { case (offset, duration) =>
+    offsetAndDuration.foreach {
+      case (offset, duration) =>
         clock.set(offset)
         request(stats, duration)
     }

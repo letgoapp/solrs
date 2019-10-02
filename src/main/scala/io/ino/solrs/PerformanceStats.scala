@@ -11,9 +11,12 @@ import scala.collection.concurrent.TrieMap
 import scala.reflect.ClassTag
 
 /**
- * Statistics for a solr server.
- */
-class PerformanceStats(val solrServer: SolrServer, initialPredictedResponseTime: Long, clock: Clock) {
+  * Statistics for a solr server.
+  */
+class PerformanceStats(
+    val solrServer: SolrServer,
+    initialPredictedResponseTime: Long,
+    clock: Clock) {
 
   private val logger = LoggerFactory.getLogger(getClass)
 
@@ -25,31 +28,34 @@ class PerformanceStats(val solrServer: SolrServer, initialPredictedResponseTime:
   // requests lasting longer than this are removed from currentRequests
   protected val currentRequestsRemoveThreshold = 10000L
 
-  private val emptyMap = Map.empty[QueryClass, CountAndDuration]
+  private val emptyMap             = Map.empty[QueryClass, CountAndDuration]
   private var lastCalculatedSecond = -1L
 
   // store all current requests with their startedAtMillis, independently from the queryClass, to predict
   // response time based on the longest lasting request.
   // the idea is that a stop-the-world gc is affecting all requests, independently from the actual query
-  private val currentRequests = TrieMap.empty[QueryClass, util.NavigableSet[RequestHandle]].withDefaultValue(new ConcurrentSkipListSet[RequestHandle])
+  private val currentRequests = TrieMap
+    .empty[QueryClass, util.NavigableSet[RequestHandle]]
+    .withDefaultValue(new ConcurrentSkipListSet[RequestHandle])
   // shortcut method, withDefault does not update the map...
-  private def currentRequestsFor(queryClass: QueryClass): util.NavigableSet[RequestHandle] = {
+  private def currentRequestsFor(queryClass: QueryClass): util.NavigableSet[RequestHandle] =
     currentRequests.getOrElseUpdate(queryClass, new ConcurrentSkipListSet[RequestHandle])
-  }
 
   // stores a bucket per second
-  private val buckets = TrieMap.empty[Long, Bucket]
+  private val buckets                      = TrieMap.empty[Long, Bucket]
   private def bucket(second: Long): Bucket = buckets.getOrElseUpdate(second, new Bucket(second))
 
   // EvictingArray is "appending" => latest entry is at last position (array(array.length))
-  private val requestAveragesPerSecond = EvictingArray.fill[Map[QueryClass, CountAndDuration]](60)(Map.empty)
+  private val requestAveragesPerSecond =
+    EvictingArray.fill[Map[QueryClass, CountAndDuration]](60)(Map.empty)
   // Array, from index 0 = latest 10 seconds to index 5 = oldest 10 seconds
   private val requestAveragesPer10Seconds = Array.fill[Map[QueryClass, Duration]](6)(Map.empty)
 
   // overall average
-  private val totalCountAndDuration = TrieMap.empty[QueryClass, CountAndDuration].withDefaultValue(0 -> 0L)
+  private val totalCountAndDuration =
+    TrieMap.empty[QueryClass, CountAndDuration].withDefaultValue(0 -> 0L)
 
-  def requestStarted(queryClass: QueryClass): RequestHandle = {
+  def requestStarted(queryClass: QueryClass): RequestHandle =
     new RequestHandle {
       override val startedAtMillis: Duration = clock.millis()
       // store this request, so that it can be used for prediction
@@ -62,18 +68,17 @@ class PerformanceStats(val solrServer: SolrServer, initialPredictedResponseTime:
         currentRequests(queryClass).remove(this)
       }
     }
-  }
 
   /**
-   * Update stats from recorded requests.
-   */
+    * Update stats from recorded requests.
+    */
   def updateStats(): Unit = {
     val nowSecond = MILLISECONDS.toSeconds(clock.millis())
 
-    val seconds = if(lastCalculatedSecond == -1) {
+    val seconds = if (lastCalculatedSecond == -1) {
       buckets.keys.toSeq.sorted.headOption match {
         case Some(second) => second to nowSecond - 1
-        case None => IndexedSeq.empty
+        case None         => IndexedSeq.empty
       }
     } else {
       lastCalculatedSecond + 1 to nowSecond - 1
@@ -87,10 +92,13 @@ class PerformanceStats(val solrServer: SolrServer, initialPredictedResponseTime:
     // clean up concurrent requests if it's growing unexpectedly... to prevent memory leaks if some requests are not finished
     // those requests will no longer be available for prediction
     currentRequests.values.foreach { requests =>
-      if(requests.size() > currentRequestsSizeCheckLimit) {
+      if (requests.size() > currentRequestsSizeCheckLimit) {
         import scala.collection.JavaConverters._
-        val requestsToRemove = requests.asScala.filter(_.startedAtMillis > currentRequestsRemoveThreshold)
-        logger.warn(s"Current requests exceed limit $currentRequestsSizeCheckLimit, removing ${requestsToRemove.size} requests for cleanup.")
+        val requestsToRemove =
+          requests.asScala.filter(_.startedAtMillis > currentRequestsRemoveThreshold)
+        logger.warn(
+          s"Current requests exceed limit $currentRequestsSizeCheckLimit, removing ${requestsToRemove.size} requests for cleanup."
+        )
         requestsToRemove.foreach(entry => requests.remove(entry))
       }
     }
@@ -101,20 +109,28 @@ class PerformanceStats(val solrServer: SolrServer, initialPredictedResponseTime:
     val allAverages = requestAveragesPerSecond.values.reverse
     // logger.trace(s"Updating lastMinuteIn10Seconds from allAverages ${allAverages.mkString(", ")}")
     for (idx <- 0 until 6) {
-      val from = idx * 10
-      val until = from + 10
+      val from     = idx * 10
+      val until    = from + 10
       val averages = allAverages.slice(from, until)
-      val countsAndDurationsByQueryClass = averages.foldLeft(emptyMap.withDefault(queryClass => 0 -> 0L)) { case (res, averagesForSecond) =>
-        if (averagesForSecond.isEmpty) res
-        else {
-          averagesForSecond.foldLeft(res) { case (res2, (queryClass, (countForSecond, averageForSecond))) =>
-            val (count, durations) = res2(queryClass)
-            val x = res2.updated(queryClass, (count + countForSecond) -> (durations + countForSecond * averageForSecond))
-            x
-          }
+      val countsAndDurationsByQueryClass =
+        averages.foldLeft(emptyMap.withDefault(queryClass => 0 -> 0L)) {
+          case (res, averagesForSecond) =>
+            if (averagesForSecond.isEmpty) res
+            else {
+              averagesForSecond.foldLeft(res) {
+                case (res2, (queryClass, (countForSecond, averageForSecond))) =>
+                  val (count, durations) = res2(queryClass)
+                  val x = res2.updated(
+                    queryClass,
+                    (count + countForSecond) -> (durations + countForSecond * averageForSecond)
+                  )
+                  x
+              }
+            }
         }
+      val averagesByQueryClass = countsAndDurationsByQueryClass.mapValues {
+        case (count, durationSum) => durationSum / count
       }
-      val averagesByQueryClass = countsAndDurationsByQueryClass.mapValues { case (count, durationSum) => durationSum / count }
       requestAveragesPer10Seconds.update(idx, averagesByQueryClass)
     }
   }
@@ -134,35 +150,43 @@ class PerformanceStats(val solrServer: SolrServer, initialPredictedResponseTime:
     }
   }
 
-  def averageDurationForSecond(queryClass: QueryClass, relativeSecond: Int): Option[Long] = {
+  def averageDurationForSecond(queryClass: QueryClass, relativeSecond: Int): Option[Long] =
     requestAveragesPerSecond.lastUpdate(relativeSecond).get(queryClass).map {
       case (count, duration) => duration
     }
-  }
 
   def dumpStats(queryClass: QueryClass): Unit = {
     val sb = new StringBuilder()
-    sb.append(s"====== stats for [${solrServer.baseUrl}][queryClass $queryClass] at ${clock.millis()} millis ======")
+    sb.append(
+      s"====== stats for [${solrServer.baseUrl}][queryClass $queryClass] at ${clock.millis()} millis ======"
+    )
     import scala.collection.JavaConverters._
     currentRequests(queryClass).asScala.foreach(req => sb.append(s"\n[currentRequest] $req"))
-    buckets.foreach { case (sec, bucket) =>
-      bucket.averageDuration(queryClass).foreach(duration => sb.append(s"\n[bucket(sec $sec)] $duration"))
+    buckets.foreach {
+      case (sec, bucket) =>
+        bucket
+          .averageDuration(queryClass)
+          .foreach(duration => sb.append(s"\n[bucket(sec $sec)] $duration"))
     }
-    requestAveragesPer10Seconds.zipWithIndex.foreach { case (queryClassAndDuratin, idx) =>
-      queryClassAndDuratin.get(queryClass).foreach(duration => sb.append(s"\n[10seconds(${idx*10} - ${(idx+1)*10})] $duration"))
+    requestAveragesPer10Seconds.zipWithIndex.foreach {
+      case (queryClassAndDuratin, idx) =>
+        queryClassAndDuratin
+          .get(queryClass)
+          .foreach(
+            duration => sb.append(s"\n[10seconds(${idx * 10} - ${(idx + 1) * 10})] $duration")
+          )
     }
     logger.info(sb.toString())
     logger.info(s"\n====== END OF stats for [${solrServer.baseUrl}][queryClass $queryClass] ======")
   }
 
-  def averageDurationFor10Seconds(queryClass: QueryClass, relativeTenSeconds: Int): Option[Long] = {
+  def averageDurationFor10Seconds(queryClass: QueryClass, relativeTenSeconds: Int): Option[Long] =
     // val idx = 10 + relativeSecond
     requestAveragesPer10Seconds(math.abs(relativeTenSeconds)).get(queryClass)
-  }
 
   def totalAverageDuration(queryClass: QueryClass, defaultValue: Long): Long = {
     val (count, duration) = totalCountAndDuration(queryClass)
-    if(count == 0) {
+    if (count == 0) {
       defaultValue
     } else {
       duration / count
@@ -174,34 +198,42 @@ class PerformanceStats(val solrServer: SolrServer, initialPredictedResponseTime:
 
     val finishedRequestsAverage: Duration = {
       val currentSecond = MILLISECONDS.toSeconds(millis)
-      buckets.get(currentSecond).flatMap( currentSecondBucket =>
-        currentSecondBucket.averageDuration(queryClass)
-      ).getOrElse(
+      buckets
+        .get(currentSecond)
+        .flatMap(currentSecondBucket => currentSecondBucket.averageDuration(queryClass))
+        .getOrElse(
           averageDurationForSecond(queryClass, 0)
             .getOrElse(
               averageDurationFor10Seconds(queryClass, 0)
-                .getOrElse(
-                  totalAverageDuration(queryClass, initialPredictedResponseTime))))
+                .getOrElse(totalAverageDuration(queryClass, initialPredictedResponseTime))
+            )
+        )
     }
 
     // use pollFirst because first() throws NoSuchElementException if empty
-    Option(currentRequests(queryClass).pollFirst()).flatMap { oldestRunningRequest =>
-      if(millis - oldestRunningRequest.startedAtMillis > finishedRequestsAverage) {
-        Some(millis - oldestRunningRequest.startedAtMillis)
-      } else {
-        None
+    Option(currentRequests(queryClass).pollFirst())
+      .flatMap { oldestRunningRequest =>
+        if (millis - oldestRunningRequest.startedAtMillis > finishedRequestsAverage) {
+          Some(millis - oldestRunningRequest.startedAtMillis)
+        } else {
+          None
+        }
       }
-    }.getOrElse {
-      finishedRequestsAverage
-    }
+      .getOrElse {
+        finishedRequestsAverage
+      }
 
   }
 
   private def updateTotalCountAndDuration(measurements: Map[QueryClass, CountAndDuration]): Unit = {
-    measurements.foreach { case (queryClass, (count, duration)) =>
-      // println(s"Recording measurements ${measurements.mkString(", ")}")
-      val (oldCount, oldDuration) = totalCountAndDuration(queryClass)
-      totalCountAndDuration.update(queryClass, (oldCount + count) -> (oldDuration + count * duration))
+    measurements.foreach {
+      case (queryClass, (count, duration)) =>
+        // println(s"Recording measurements ${measurements.mkString(", ")}")
+        val (oldCount, oldDuration) = totalCountAndDuration(queryClass)
+        totalCountAndDuration.update(
+          queryClass,
+          (oldCount + count) -> (oldDuration + count * duration)
+        )
     }
   }
 
@@ -209,51 +241,55 @@ class PerformanceStats(val solrServer: SolrServer, initialPredictedResponseTime:
 
 object PerformanceStats {
 
-  type QueryClass = String
-  type Count = Int
-  type Duration = Long
+  type QueryClass       = String
+  type Count            = Int
+  type Duration         = Long
   type CountAndDuration = (Count, Duration)
 
   class CountsAndDurations {
 
-    private val requestCounts = TrieMap.empty[QueryClass, Count].withDefaultValue(0)
+    private val requestCounts            = TrieMap.empty[QueryClass, Count].withDefaultValue(0)
     private val requestDurationsInMillis = TrieMap.empty[QueryClass, Duration].withDefaultValue(0)
 
     def averageDuration(queryClass: QueryClass): Option[Duration] = {
       val count = requestCounts(queryClass)
-      if(count == 0) {
+      if (count == 0) {
         None
       } else {
         Some(requestDurationsInMillis(queryClass) / count)
       }
     }
-    
-    def averageCountsAndDurations: Map[QueryClass, CountAndDuration] = {
-      requestCounts.map { case (queryClass, count) =>
-        (queryClass, count -> requestDurationsInMillis(queryClass) / count)
+
+    def averageCountsAndDurations: Map[QueryClass, CountAndDuration] =
+      requestCounts.map {
+        case (queryClass, count) =>
+          (queryClass, count -> requestDurationsInMillis(queryClass) / count)
       }.toMap
-    }
 
     def record(queryClass: QueryClass, durationInMillis: Duration): Unit = {
       requestCounts.update(queryClass, requestCounts(queryClass) + 1)
-      requestDurationsInMillis.update(queryClass, requestDurationsInMillis(queryClass) + durationInMillis)
+      requestDurationsInMillis.update(
+        queryClass,
+        requestDurationsInMillis(queryClass) + durationInMillis
+      )
     }
 
-    def recordAll(records: Map[QueryClass, Duration]): Unit = records.foreach { case (queryClass, duration) =>
-      record(queryClass, duration)
+    def recordAll(records: Map[QueryClass, Duration]): Unit = records.foreach {
+      case (queryClass, duration) =>
+        record(queryClass, duration)
     }
 
   }
 
   /**
-   * Stores stats for a single second.
-   */
+    * Stores stats for a single second.
+    */
   class Bucket(forSecond: Long) {
 
     private val serverStats = new CountsAndDurations
 
     val register: (QueryClass, Duration) => Unit = serverStats.record
-    
+
     def averageDurations: Map[QueryClass, (Count, Duration)] = serverStats.averageCountsAndDurations
 
     def averageDuration: QueryClass => Option[Duration] = serverStats.averageDuration
@@ -264,73 +300,72 @@ object PerformanceStats {
     def startedAtMillis: Long
     def finished(): Unit
     override def compareTo(o: RequestHandle): Int = (startedAtMillis - o.startedAtMillis).toInt
-    override def toString: String = {
+    override def toString: String =
       s"RequestHandle[startedAt=$startedAtMillis]"
-    }
   }
 
   /**
-   * Mutable, fixed sized array of Long values, which evicts old values.
-   * E.g. an EvictingArray of size 2 with added values 1, 2, 3 will have stored the values 2, 3.
-   */
-  class EvictingArray[T: ClassTag] private(_values: Array[T]) {
+    * Mutable, fixed sized array of Long values, which evicts old values.
+    * E.g. an EvictingArray of size 2 with added values 1, 2, 3 will have stored the values 2, 3.
+    */
+  class EvictingArray[T: ClassTag] private (_values: Array[T]) {
 
-    private val size = _values.length
+    private val size   = _values.length
     private var length = 0
-    private var pos = 0
+    private var pos    = 0
 
     def isEmpty: Boolean = length == 0
 
-    def values: Array[T] = {
-      if(length < size) {
+    def values: Array[T] =
+      if (length < size) {
         _values.take(length)
       } else {
         val (a, b) = _values.splitAt(pos)
         (b ++ a).take(length)
       }
-    }
 
     /**
-     * Adds the given value to the array. If the array was already full so that the oldest element is dropped,
-     * this will be returned.
-     */
+      * Adds the given value to the array. If the array was already full so that the oldest element is dropped,
+      * this will be returned.
+      */
     def add(value: T): Option[T] = {
-      val res = if(length == size) Some(_values(pos)) else None
+      val res = if (length == size) Some(_values(pos)) else None
       _values.update(pos, value)
-      if(pos == size - 1) pos = 0 else pos += 1
-      if(length < size) length += 1
+      if (pos == size - 1) pos = 0 else pos += 1
+      if (length < size) length += 1
       res
     }
 
-    def lastUpdatePos: Int = {
-      if(length == 0) {
+    def lastUpdatePos: Int =
+      if (length == 0) {
         -1
-      } else if(pos == 0) {
+      } else if (pos == 0) {
         size - 1
       } else {
         pos - 1
       }
-    }
 
     def lastUpdate(relative: Int): T = {
       assert(relative <= 0, "the relative update must be <= 0")
-      if(math.abs(relative) > length) {
-        throw new IllegalArgumentException(s"Not enough updates ($length) for requested relative $relative")
+      if (math.abs(relative) > length) {
+        throw new IllegalArgumentException(
+          s"Not enough updates ($length) for requested relative $relative"
+        )
       }
       val position = pos - 1 + relative
-      _values(if(position < 0) size + position else position)
+      _values(if (position < 0) size + position else position)
     }
 
     @throws[IndexOutOfBoundsException]
     def apply(index: Int): T = {
-      if(index >= length) {
+      if (index >= length) {
         throw new IndexOutOfBoundsException(s"Maximum index ${length - 1} exceeded: $index")
       }
-      if(length < size) {
+      if (length < size) {
         _values(index)
       } else {
         val d = pos + index
-        if(d >= size) {
+        if (d >= size) {
           _values(d - size)
         } else {
           _values(d)
@@ -344,7 +379,8 @@ object PerformanceStats {
 
     def apply[T: ClassTag](size: Int): EvictingArray[T] = new EvictingArray[T](Array.ofDim[T](size))
 
-    def fill[T: ClassTag](size: Int)(elem: => T): EvictingArray[T] = new EvictingArray[T](Array.fill[T](size)(elem))
+    def fill[T: ClassTag](size: Int)(elem: => T): EvictingArray[T] =
+      new EvictingArray[T](Array.fill[T](size)(elem))
 
   }
 

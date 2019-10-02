@@ -9,7 +9,8 @@ trait SolrResponseFactory[T <: SolrResponse] {
 }
 
 object SolrResponseFactory {
-  def apply[T <: SolrResponse](implicit factory: SolrResponseFactory[T]): SolrResponseFactory[T] = factory
+  def apply[T <: SolrResponse](implicit factory: SolrResponseFactory[T]): SolrResponseFactory[T] =
+    factory
 
   def instance[T <: SolrResponse](func: SolrRequest[_ <: T] => T): SolrResponseFactory[T] =
     new SolrResponseFactory[T] {
@@ -30,10 +31,8 @@ object SolrResponseFactory {
 
   implicit val dynamicResponseFactory: SolrResponseFactory[SolrResponse] =
     instance {
-      case r: QueryRequest => SolrResponseFactory[QueryResponse].createResponse(r)
+      case r: QueryRequest  => SolrResponseFactory[QueryResponse].createResponse(r)
       case r: UpdateRequest => SolrResponseFactory[UpdateResponse].createResponse(r)
-      case r: SolrPing => SolrResponseFactory[SolrPingResponse].createResponse(r)
+      case r: SolrPing      => SolrResponseFactory[SolrPingResponse].createResponse(r)
     }
 }
-
-

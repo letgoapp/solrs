@@ -27,16 +27,16 @@ import scala.xml.XML
 
 class AsyncSolrClientIntegrationSpec extends StandardFunSpec with RunningSolr {
 
-  private implicit val patienceConfig = PatienceConfig(
+  implicit private val patienceConfig = PatienceConfig(
     timeout = scaled(Span(10000, Millis)),
     interval = scaled(Span(20, Millis))
   )
 
-  private implicit val timeout = 1.second
-  private val httpClient = new DefaultAsyncHttpClient()
+  implicit private val timeout = 1.second
+  private val httpClient       = new DefaultAsyncHttpClient()
 
   private lazy val solrUrl = s"http://localhost:${solrRunner.port}/solr/collection1"
-  private lazy val solrs = AsyncSolrClient(solrUrl)
+  private lazy val solrs   = AsyncSolrClient(solrUrl)
 
   import io.ino.solrs.SolrUtils._
 
@@ -67,29 +67,32 @@ class AsyncSolrClientIntegrationSpec extends StandardFunSpec with RunningSolr {
     it("should allow to regularly observe the server status") {
       val solrServers = Seq(SolrServer(solrUrl))
 
-      val solr = AsyncSolrClient.Builder(new SingleServerLB(solrUrl)).withServerStateObservation(
-        new PingStatusObserver(solrServers, httpClient),
-        20 millis,
-        Executors.newSingleThreadScheduledExecutor()
-      ).build
+      val solr = AsyncSolrClient
+        .Builder(new SingleServerLB(solrUrl))
+        .withServerStateObservation(
+          new PingStatusObserver(solrServers, httpClient),
+          20 millis,
+          Executors.newSingleThreadScheduledExecutor()
+        )
+        .build
 
       enable(solrUrl)
       eventually {
-        solrServers(0).status should be (Enabled)
+        solrServers(0).status should be(Enabled)
       }
 
       disable(solrUrl)
       eventually {
-        solrServers(0).status should be (Disabled)
+        solrServers(0).status should be(Disabled)
       }
 
       solr.shutdown()
     }
 
     it("should be built with LoadBalancer") {
-      val solr = AsyncSolrClient.Builder(new SingleServerLB(solrUrl)).build
+      val solr     = AsyncSolrClient.Builder(new SingleServerLB(solrUrl)).build
       val response = solr.query(new SolrQuery("cat:cat1"))
-      await(response).getResults.getNumFound should be (2)
+      await(response).getResults.getNumFound should be(2)
     }
 
     it("should allow to set the http client") {
@@ -98,7 +101,7 @@ class AsyncSolrClientIntegrationSpec extends StandardFunSpec with RunningSolr {
 
       val response = solr.query(new SolrQuery("cat:cat1"))
 
-      await(response).getResults.getNumFound should be (2)
+      await(response).getResults.getNumFound should be(2)
 
       solr.shutdown()
     }
@@ -109,7 +112,7 @@ class AsyncSolrClientIntegrationSpec extends StandardFunSpec with RunningSolr {
 
       val response = solr.query(new SolrQuery("cat:cat1"))
 
-      await(response).getResults.getNumFound should be (2)
+      await(response).getResults.getNumFound should be(2)
 
       solr.shutdown()
     }
@@ -119,8 +122,8 @@ class AsyncSolrClientIntegrationSpec extends StandardFunSpec with RunningSolr {
       val solr = AsyncSolrClient.Builder(solrUrl).build
 
       val request = new GenericSolrRequest(
-      SolrRequest.METHOD.POST,
-      null,
+        SolrRequest.METHOD.POST,
+        null,
         new SolrQuery("cat:cat1").add("wt", "xml")
       )
       request.setResponseParser(new NoOpResponseParser)
@@ -129,7 +132,7 @@ class AsyncSolrClientIntegrationSpec extends StandardFunSpec with RunningSolr {
 
       var xml = XML.loadString(await(response).getResponse.get("response").toString)
 
-      (xml \ "result" \ "@numFound").text.toInt should be (2)
+      (xml \ "result" \ "@numFound").text.toInt should be(2)
 
       solr.shutdown()
     }
@@ -139,8 +142,10 @@ class AsyncSolrClientIntegrationSpec extends StandardFunSpec with RunningSolr {
       val response: Future[QueryResponse] = solrs.query(new SolrQuery("fieldDoesNotExist:foo"))
 
       awaitReady(response)
-      a [RemoteSolrException] should be thrownBy await(response)
-      (the [RemoteSolrException] thrownBy await(response)).getMessage should include ("undefined field fieldDoesNotExist")
+      a[RemoteSolrException] should be thrownBy await(response)
+      (the[RemoteSolrException] thrownBy await(response)).getMessage should include(
+        "undefined field fieldDoesNotExist"
+      )
     }
 
     it("should return failed future on wrong request path") {
@@ -149,16 +154,18 @@ class AsyncSolrClientIntegrationSpec extends StandardFunSpec with RunningSolr {
       val response = solr.query(new SolrQuery("*:*"))
 
       awaitReady(response)
-      a [RemoteSolrException] should be thrownBy await(response)
+      a[RemoteSolrException] should be thrownBy await(response)
       // embedded Jetty returns 404 with text/html response with error message in body
-      (the [RemoteSolrException] thrownBy await(response)).getMessage should include ("Expected mime type [] but got [text/html]")
+      (the[RemoteSolrException] thrownBy await(response)).getMessage should include(
+        "Expected mime type [] but got [text/html]"
+      )
 
       solr.shutdown()
     }
 
     it("should gather request time metrics") {
       val metrics = mock[Metrics]
-      val solr = AsyncSolrClient.Builder(solrUrl).withMetrics(metrics).build
+      val solr    = AsyncSolrClient.Builder(solrUrl).withMetrics(metrics).build
 
       await(solr.query(new SolrQuery("*:*")))
 
@@ -168,11 +175,14 @@ class AsyncSolrClientIntegrationSpec extends StandardFunSpec with RunningSolr {
     }
 
     it("should allow to intercept requests") {
-      var capturedServer: SolrServer = null
+      var capturedServer: SolrServer      = null
       var capturedRequest: SolrRequest[_] = null
       val interceptor = new RequestInterceptor {
-        override def interceptRequest[T <: SolrResponse](f: (SolrServer, SolrRequest[_ <: T]) => future.Future[T])
-                                                        (solrServer: SolrServer, r: SolrRequest[_ <: T]): future.Future[T] = {
+        override def interceptRequest[T <: SolrResponse](
+            f: (SolrServer, SolrRequest[_ <: T]) => future.Future[T]
+          )(solrServer: SolrServer,
+            r: SolrRequest[_ <: T]
+          ): future.Future[T] = {
           capturedServer = solrServer
           capturedRequest = r
           f(solrServer, r)
@@ -183,23 +193,32 @@ class AsyncSolrClientIntegrationSpec extends StandardFunSpec with RunningSolr {
       val q: SolrQuery = new SolrQuery("*:*")
       await(solr.query(q))
 
-      capturedServer should be (SolrServer(solrUrl))
-      capturedRequest.asInstanceOf[QueryRequest].getParams should be (q)
+      capturedServer should be(SolrServer(solrUrl))
+      capturedRequest.asInstanceOf[QueryRequest].getParams should be(q)
 
       solr.shutdown()
     }
 
   }
 
-  private def enable(solrUrl: String) = setStatus(solrUrl, "enable", expectedStatus = 200)
+  private def enable(solrUrl: String)  = setStatus(solrUrl, "enable", expectedStatus = 200)
   private def disable(solrUrl: String) = setStatus(solrUrl, "disable", expectedStatus = 503)
   @tailrec
-  private def setStatus(solrUrl: String, action: String, expectedStatus: Int, attempt: Int = 1): Unit = {
-    val response = httpClient.prepareGet(s"$solrUrl/admin/ping?action=$action&wt=xml").execute().get()
+  private def setStatus(
+      solrUrl: String,
+      action: String,
+      expectedStatus: Int,
+      attempt: Int = 1
+    ): Unit = {
+    val response =
+      httpClient.prepareGet(s"$solrUrl/admin/ping?action=$action&wt=xml").execute().get()
     response.getStatusCode shouldBe 200
-    val newStatusCode = httpClient.prepareGet(s"$solrUrl/admin/ping?wt=xml").execute().get().getStatusCode
-    if(newStatusCode != expectedStatus && attempt > 3) {
-      throw new IllegalStateException(s"Could not reach expected status $expectedStatus via action '$action', reached $newStatusCode instead.")
+    val newStatusCode =
+      httpClient.prepareGet(s"$solrUrl/admin/ping?wt=xml").execute().get().getStatusCode
+    if (newStatusCode != expectedStatus && attempt > 3) {
+      throw new IllegalStateException(
+        s"Could not reach expected status $expectedStatus via action '$action', reached $newStatusCode instead."
+      )
     } else if (newStatusCode != expectedStatus) {
       Thread.sleep(20)
       setStatus(solrUrl, action, expectedStatus, attempt + 1)

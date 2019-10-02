@@ -28,23 +28,23 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 
 /**
- * Test that starts ZK, solrRunners and our Class Under Test before all tests.
- */
+  * Test that starts ZK, solrRunners and our Class Under Test before all tests.
+  */
 class CloudSolrServersIntegrationSpec extends StandardFunSpec {
 
-  private implicit val awaitTimeout: FiniteDuration = 2 seconds
-  private implicit val patienceConfig: PatienceConfig = PatienceConfig(timeout = scaled(Span(20000, Millis)),
-                                                       interval = scaled(Span(1000, Millis)))
+  implicit private val awaitTimeout: FiniteDuration = 2 seconds
+  implicit private val patienceConfig: PatienceConfig =
+    PatienceConfig(timeout = scaled(Span(20000, Millis)), interval = scaled(Span(1000, Millis)))
 
   private type AsyncSolrClient = io.ino.solrs.AsyncSolrClient[Future]
 
   private var solrRunner: SolrCloudRunner = _
 
-  private def zkConnectString = solrRunner.zkAddress
-  private def solrServerUrls = solrRunner.solrCoreUrls
+  private def zkConnectString       = solrRunner.zkAddress
+  private def solrServerUrls        = solrRunner.solrCoreUrls
   private def solrServerUrlsEnabled = solrServerUrls.map(SolrServer(_, Enabled))
 
-  private var solrJClient: CloudSolrClient = _
+  private var solrJClient: CloudSolrClient                            = _
   private var asyncSolrClients: Map[JettySolrRunner, AsyncSolrClient] = _
 
   private var cut: CloudSolrServers[Future] = _
@@ -59,7 +59,12 @@ class CloudSolrServersIntegrationSpec extends StandardFunSpec {
       defaultCollection = Some("collection1")
     )
     solrJClient = solrRunner.solrJClient
-    asyncSolrClients = solrRunner.jettySolrRunners.map(jetty => jetty -> AsyncSolrClient(s"http://$hostName:${jetty.getLocalPort}/solr/collection1")).toMap
+    asyncSolrClients = solrRunner.jettySolrRunners
+      .map(
+        jetty =>
+          jetty -> AsyncSolrClient(s"http://$hostName:${jetty.getLocalPort}/solr/collection1")
+      )
+      .toMap
 
     eventually(Timeout(10 seconds)) {
       solrJClient.deleteByQuery("*:*")
@@ -73,7 +78,7 @@ class CloudSolrServersIntegrationSpec extends StandardFunSpec {
     super.beforeEach()
     // ensure that all nodes are running, and none's left in stopped state
     solrRunner.jettySolrRunners.foreach { jetty =>
-      if(jetty.isStopped) SolrRunner.startJetty(jetty)
+      if (jetty.isStopped) SolrRunner.startJetty(jetty)
     }
   }
 
@@ -101,13 +106,14 @@ class CloudSolrServersIntegrationSpec extends StandardFunSpec {
         cut.all should contain theSameElementsAs solrServerUrlsEnabled
       }
 
-      asyncSolrClients.foreach { case(_, client) =>
-        eventually {
-          // don't use Int.MaxValue to get all docs with distributed queries,
-          // see also https://stackoverflow.com/questions/32046716/solr-to-get-all-records
-          val response = client.query(new SolrQuery("*:*").setRows(1000)).map(getIds)
-          await(response) should contain theSameElementsAs someDocsIds
-        }
+      asyncSolrClients.foreach {
+        case (_, client) =>
+          eventually {
+            // don't use Int.MaxValue to get all docs with distributed queries,
+            // see also https://stackoverflow.com/questions/32046716/solr-to-get-all-records
+            val response = client.query(new SolrQuery("*:*").setRows(1000)).map(getIds)
+            await(response) should contain theSameElementsAs someDocsIds
+          }
       }
     }
 
@@ -136,7 +142,11 @@ class CloudSolrServersIntegrationSpec extends StandardFunSpec {
     }
 
     it("should route requests according to _route_ param") {
-      cut = new CloudSolrServers(zkConnectString, defaultCollection = Some("collection1"), clusterStateUpdateInterval = 100 millis)
+      cut = new CloudSolrServers(
+        zkConnectString,
+        defaultCollection = Some("collection1"),
+        clusterStateUpdateInterval = 100 millis
+      )
       cut.setAsyncSolrClient(mockDoRequest(mock[AsyncSolrClient])(Clock.mutable))
 
       import Equalities.solrServerStatusEquality
@@ -148,59 +158,67 @@ class CloudSolrServersIntegrationSpec extends StandardFunSpec {
       // we only want to query these replicas, i.e. route the request to them
 
       def serverContainsDoc(url: String, id: String): Boolean = {
-        val client = new HttpSolrClient.Builder(url).withHttpClient(solrJClient.getHttpClient).build()
+        val client =
+          new HttpSolrClient.Builder(url).withHttpClient(solrJClient.getHttpClient).build()
         // restrict search to exactly this shard replica
-        client.query(new SolrQuery(s"""id:"$id"""").setParam(SHARDS, url)).getResults.getNumFound > 0
+        client
+          .query(new SolrQuery(s"""id:"$id"""").setParam(SHARDS, url))
+          .getResults
+          .getNumFound > 0
       }
 
       val expectedServersByDoc: Map[SolrInputDocument, List[String]] = docs.map { doc =>
-        val id = doc.getFieldValue("id").toString
+        val id              = doc.getFieldValue("id").toString
         val expectedServers = solrServerUrls.filter(serverContainsDoc(_, id))
         doc -> expectedServers
       }(breakOut)
 
-      expectedServersByDoc.foreach { case (doc, expectedServers) =>
-        val id = doc.getFieldValue("id").toString
-        val route = id.substring(0, id.indexOf('!') + 1)
-        val request = new QueryRequest(new SolrQuery("*:*").setParam(_ROUTE_, route))
-        cut.matching(request).get should contain theSameElementsAs expectedServers.map(SolrServer(_, Enabled))
+      expectedServersByDoc.foreach {
+        case (doc, expectedServers) =>
+          val id      = doc.getFieldValue("id").toString
+          val route   = id.substring(0, id.indexOf('!') + 1)
+          val request = new QueryRequest(new SolrQuery("*:*").setParam(_ROUTE_, route))
+          cut.matching(request).get should contain theSameElementsAs expectedServers.map(
+            SolrServer(_, Enabled)
+          )
       }
 
       // now stop a server
       val solrServers = solrServerUrlsEnabled
       SolrRunner.stopJetty(solrRunner.jettySolrRunners.head)
-        solrServers.head.status = Failed
-        eventually {
-          cut.all should contain theSameElementsAs solrServers
-        }
+      solrServers.head.status = Failed
+      eventually {
+        cut.all should contain theSameElementsAs solrServers
+      }
 
-        // ensure that the returned servers per route also contain the expected status
-        expectedServersByDoc.foreach { case (doc, expectedServers) =>
-          val id = doc.getFieldValue("id").toString
-          val route = id.substring(0, id.indexOf('!') + 1)
+      // ensure that the returned servers per route also contain the expected status
+      expectedServersByDoc.foreach {
+        case (doc, expectedServers) =>
+          val id      = doc.getFieldValue("id").toString
+          val route   = id.substring(0, id.indexOf('!') + 1)
           val request = new QueryRequest(new SolrQuery("*:*").setParam(_ROUTE_, route))
           val expectedServersWithStatus = expectedServers.map {
             case serverUrl if serverUrl == solrServers.head.baseUrl => SolrServer(serverUrl, Failed)
-            case serverUrl => SolrServer(serverUrl, Enabled)
+            case serverUrl                                          => SolrServer(serverUrl, Enabled)
           }
           cut.matching(request).get should contain theSameElementsAs expectedServersWithStatus
-        }
+      }
 
     }
 
     it("should test solr instances according to the WarmupQueries") {
-      val queries = Seq(new SolrQuery("foo"))
+      val queries       = Seq(new SolrQuery("foo"))
       val warmupQueries = WarmupQueries(queriesByCollection = _ => queries, count = 2)
       cut = new CloudSolrServers(zkConnectString, warmupQueries = Some(warmupQueries))
 
       val standardResponsePromise = futureFactory.newPromise[QueryResponse]
-      val standardResponse = standardResponsePromise.future
+      val standardResponse        = standardResponsePromise.future
 
       val asyncSolrClient = mockDoRequest(mock[AsyncSolrClient], standardResponse)
       cut.setAsyncSolrClient(asyncSolrClient)
 
       // initially the list of servers should be empty
-      cut.all should be ('empty)
+      cut.all should be('empty)
 
       // as soon as the response is set the LB should provide the servers...
       standardResponsePromise.success(new QueryResponse())
@@ -213,7 +231,8 @@ class CloudSolrServersIntegrationSpec extends StandardFunSpec {
       // and the servers should have been tested with queries
       solrServerUrlsEnabled.foreach { solrServer =>
         warmupQueries.queriesByCollection("col1").foreach { q =>
-          verify(asyncSolrClient, times(warmupQueries.count)).doExecute[QueryResponse](hasBaseUrlOf(solrServer), hasQuery(q))(any())
+          verify(asyncSolrClient, times(warmupQueries.count))
+            .doExecute[QueryResponse](hasBaseUrlOf(solrServer), hasQuery(q))(any())
         }
       }
     }
@@ -246,7 +265,8 @@ class CloudSolrServersIntegrationSpec extends StandardFunSpec {
     solrJClient.commit()
 
     eventually {
-      val response = asyncSolrClients.values.head.query(new SolrQuery("*:*").setRows(10)).map(getIds)
+      val response =
+        asyncSolrClients.values.head.query(new SolrQuery("*:*").setRows(10)).map(getIds)
       await(response) should contain theSameElementsAs docs.map(_.getFieldValue("id").toString)
     }
 

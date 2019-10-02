@@ -10,15 +10,15 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 
 /**
- * Test that starts uninitialized, there is no ZK and no solr servers started before tests. 
- */
+  * Test that starts uninitialized, there is no ZK and no solr servers started before tests.
+  */
 class CloudSolrServersUninitializedIntegrationSpec extends StandardFunSpec {
 
-  private implicit val awaitTimeout = 2 seconds
-  private implicit val patienceConfig = PatienceConfig(timeout = scaled(Span(1000, Millis)))
+  implicit private val awaitTimeout   = 2 seconds
+  implicit private val patienceConfig = PatienceConfig(timeout = scaled(Span(1000, Millis)))
 
   private var solrRunner: SolrCloudRunner = _
-  private def solrServerUrls = solrRunner.solrCoreUrls
+  private def solrServerUrls              = solrRunner.solrCoreUrls
 
   private var cut: Option[CloudSolrServers[Future]] = None
 
@@ -37,13 +37,19 @@ class CloudSolrServersUninitializedIntegrationSpec extends StandardFunSpec {
   describe("CloudSolrServers") {
 
     /**
-     * Somehow motivated by
-     * SOLR-5359 CloudSolrServer tries to connect to zookeeper forever when ensemble is unavailable
-     * while we do NOT have the requirement that connection retries are stopped after connection timeout
-     */
+      * Somehow motivated by
+      * SOLR-5359 CloudSolrServer tries to connect to zookeeper forever when ensemble is unavailable
+      * while we do NOT have the requirement that connection retries are stopped after connection timeout
+      */
     it("should be able to start and stop with unavailable ZK") {
       // Create CUT when there's no ZK available
-      cut = Some(new CloudSolrServers("localhost:2181", zkConnectTimeout = 1 second, clusterStateUpdateInterval = 100 millis))
+      cut = Some(
+        new CloudSolrServers(
+          "localhost:2181",
+          zkConnectTimeout = 1 second,
+          clusterStateUpdateInterval = 100 millis
+        )
+      )
       val asyncSolrClient = mockDoRequest(mock[AsyncSolrClient])(Clock.mutable)
       cut.foreach(_.setAsyncSolrClient(asyncSolrClient))
 
@@ -53,20 +59,33 @@ class CloudSolrServersUninitializedIntegrationSpec extends StandardFunSpec {
     }
 
     /**
-     * See e.g. SOLR-4044 CloudSolrServer early connect problems
-     */
-    it("should be able to start with unavailable ZK and should be connected as soon as ZK is available") {
-      val zkPort = 2181
+      * See e.g. SOLR-4044 CloudSolrServer early connect problems
+      */
+    it(
+      "should be able to start with unavailable ZK and should be connected as soon as ZK is available"
+    ) {
+      val zkPort          = 2181
       val zkConnectString = s"localhost:$zkPort/solr"
 
       // Create CUT when there's no ZK available. There are also no solr servers started, so that initially the
       // zkStateReader.createClusterStateWatchersAndUpdate will fail as well...
-      cut = Some(new CloudSolrServers(zkConnectString, zkConnectTimeout = 1 second, clusterStateUpdateInterval = 100 millis))
+      cut = Some(
+        new CloudSolrServers(
+          zkConnectString,
+          zkConnectTimeout = 1 second,
+          clusterStateUpdateInterval = 100 millis
+        )
+      )
       val asyncSolrClient = mockDoRequest(mock[AsyncSolrClient])(Clock.mutable)
       cut.foreach(_.setAsyncSolrClient(asyncSolrClient))
 
       // Now start Solr Runner
-      solrRunner = SolrCloudRunner.start(2, List(SolrCollection("collection1", 2, 1)), Some("collection1"), Some(zkPort))
+      solrRunner = SolrCloudRunner.start(
+        2,
+        List(SolrCollection("collection1", 2, 1)),
+        Some("collection1"),
+        Some(zkPort)
+      )
 
       eventually(Timeout(20 seconds)) {
         import Equalities.solrServerStatusEquality
@@ -76,7 +95,6 @@ class CloudSolrServersUninitializedIntegrationSpec extends StandardFunSpec {
     }
 
     // Support collection alias created after ZkStateReader has been constructed
-
 
   }
 
